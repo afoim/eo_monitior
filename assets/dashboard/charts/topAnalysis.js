@@ -115,6 +115,10 @@ function updateTopMapChart(charts, results) {
     const data = results[metric];
 
     if (!data || data.type !== 'top' || !data.data) return;
+    if (!globalThis.echarts?.getMap?.('world')) {
+        chartTopMap?.clear?.();
+        return;
+    }
 
     // Map data to ECharts format
     // IMPORTANT: The 'name' here must match the region name AFTER nameMap is applied.
@@ -156,12 +160,10 @@ function updateTopMapChart(charts, results) {
             {
                 name: t('charts.requests'),
                 type: 'map',
-                mapType: 'world',
+                map: 'world',
                 roam: true,
                 ...(locale === 'zh-Hans' ? { nameMap: worldNameMap } : {}),
-                itemStyle: {
-                    emphasis: { label: { show: true } }
-                },
+                emphasis: { label: { show: true } },
                 data: mapData
             }
         ]

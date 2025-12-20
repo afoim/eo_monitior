@@ -23,6 +23,28 @@ import {
 } from './charts.js';
 
 let charts = null;
+let worldMapReadyPromise = null;
+
+async function ensureWorldMapRegistered() {
+  if (globalThis.echarts?.getMap?.('world')) return;
+  if (!worldMapReadyPromise) {
+    const url = './assets/geo/world.json';
+    worldMapReadyPromise = fetch(url, { cache: 'force-cache' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to fetch world GeoJSON: ${res.status} ${res.statusText}`);
+        return res.json();
+      })
+      .then((geojson) => {
+        globalThis.echarts.registerMap('world', geojson);
+        return geojson;
+      })
+      .catch((err) => {
+        console.error('[echarts] Failed to load/register world map GeoJSON:', err);
+        return null;
+      });
+  }
+  await worldMapReadyPromise;
+}
 
 initI18n();
 applyTranslations();
@@ -231,6 +253,7 @@ async function fetchPagesCloudFunctionMonthlyStats() {
 
 export async function refreshData() {
     if (!charts) return;
+    await ensureWorldMapRegistered();
     // Show loading
     document.querySelectorAll('[id^="kpi_"]').forEach(el => el.innerText = t('common.loading'));
 
@@ -284,7 +307,7 @@ export async function refreshData() {
 
 export async function initDashboard() {
   charts = initCharts();
-  await fetchZones();
+  await Promise.all([fetchZones(), ensureWorldMapRegistered()]);
   await refreshData();
 
   window.addEventListener('resize', () => resizeCharts(charts));
