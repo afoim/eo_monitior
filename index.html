@@ -11,22 +11,428 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #cbd5e1;
+        }
+        
+        /* 卡片动态效果 */
+        .bg-card, .bg-white {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        
+        .bg-card:hover, .bg-white:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1), 0 8px 8px -6px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        /* 排除设置模态框和一些不应有动画的元素 */
+        #settings-modal .bg-white, 
+        #settings-modal .bg-card,
+        .no-hover:hover {
+            transform: none !important;
+        }
     </style>
     <script>
-        // Fetch config immediately
+        let currentConfig = {};
+
         async function fetchConfig() {
             try {
                 const response = await fetch('/api/config');
-                const config = await response.json();
-                if (config.siteName) {
-                    document.title = config.siteName;
+                currentConfig = await response.json();
+                if (currentConfig.siteName) {
+                    document.title = currentConfig.siteName;
                     const headerEl = document.getElementById('page-header');
-                    if (headerEl) headerEl.innerText = config.siteName;
+                    if (headerEl) headerEl.innerText = currentConfig.siteName;
+                }
+                const useBg = currentConfig.useBackgroundImage !== false;
+                applyBackground(currentConfig.backgroundImage, useBg);
+                applyOpacity(currentConfig.cardOpacity);
+                renderFriendLinks(currentConfig.friendLinks);
+
+                // If backend says IP is authorized, sync to local
+                if (currentConfig.isAuthorized) {
+                    // We don't have the token, but we can set a dummy one to skip login UI
+                    if (!localStorage.getItem('admin_token')) {
+                        localStorage.setItem('admin_token', 'ip_authorized');
+                    }
+                } else {
+                    // If not authorized by IP and no local token, clear it
+                    if (localStorage.getItem('admin_token') === 'ip_authorized') {
+                        localStorage.removeItem('admin_token');
+                    }
                 }
             } catch (err) {
                 console.error("Error fetching config:", err);
             }
         }
+
+        function applyBackground(url, useBg = true) {
+            if (useBg && url) {
+                document.body.style.backgroundImage = `url('${url}')`;
+                document.body.style.backgroundSize = 'cover';
+                document.body.style.backgroundPosition = 'center';
+                document.body.style.backgroundAttachment = 'fixed';
+                document.body.style.backgroundRepeat = 'no-repeat';
+            } else {
+                document.body.style.backgroundImage = '';
+            }
+        }
+
+        function applyOpacity(opacity) {
+            if (opacity === undefined || opacity === null) opacity = 1.0;
+            
+            let styleEl = document.getElementById('dynamic-opacity-style');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'dynamic-opacity-style';
+                document.head.appendChild(styleEl);
+            }
+            
+            styleEl.textContent = `
+                .bg-white, .bg-card {
+                    background-color: rgba(255, 255, 255, ${opacity}) !important;
+                }
+                /* 确保设置模态框保持不透明 */
+                #settings-modal .bg-white, #settings-modal .bg-card {
+                    background-color: rgba(255, 255, 255, 1) !important;
+                }
+                
+                /* 简洁模式样式 */
+                body.simple-mode {
+                    /* 保持背景显示 */
+                }
+                body.simple-mode .simple-mode-hidden {
+                    display: none !important;
+                }
+                body.simple-mode .max-w-7xl {
+                    max-width: 100% !important;
+                    padding-left: 1rem;
+                    padding-right: 1rem;
+                }
+                body.simple-mode .space-y-8 > :not(.simple-mode-hidden) {
+                    margin-top: 1rem !important;
+                }
+            `;
+        }
+
+        function toggleSimpleMode() {
+            const isSimple = document.body.classList.toggle('simple-mode');
+            localStorage.setItem('simple_mode', isSimple);
+            updateSimpleModeUI();
+        }
+
+        function updateSimpleModeUI() {
+            const isSimple = document.body.classList.contains('simple-mode');
+            const btn = document.getElementById('simple-mode-btn');
+            if (btn) {
+                btn.innerHTML = isSimple 
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v10"/><path d="m16 9-4 4-4-4"/><path d="M20 21H4"/></svg>` // 退出图标
+                    : `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>`; // 简洁图标
+                btn.title = isSimple ? "退出简洁模式" : "进入简洁模式";
+            }
+        }
+
+        // 页面加载时恢复简洁模式状态
+        window.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('simple_mode') === 'true') {
+                document.body.classList.add('simple-mode');
+            }
+            updateSimpleModeUI();
+        });
+
+        function updateOpacityLabel(val) {
+            const label = document.getElementById('opacity-value');
+            if (label) label.innerText = val;
+        }
+
+        let tempFriendLinks = [];
+        let editingFriendLinkIndex = -1;
+
+        function renderSettingsFriendLinks() {
+            const container = document.getElementById('friend-links-settings-list');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            tempFriendLinks.forEach((link, index) => {
+                const isEditing = index === editingFriendLinkIndex;
+                const item = document.createElement('div');
+                item.className = `flex items-center gap-2 p-2 rounded border transition-colors ${isEditing ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`;
+                item.innerHTML = `
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium truncate ${isEditing ? 'text-blue-700' : ''}">${link.name}</div>
+                        <div class="text-xs text-slate-500 truncate">${link.url}</div>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="editFriendLink(${index})" class="text-slate-400 hover:text-blue-600 p-1" title="编辑">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                        </button>
+                        <button onclick="removeFriendLink(${index})" class="text-slate-400 hover:text-red-500 p-1" title="删除">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function editFriendLink(index) {
+            const link = tempFriendLinks[index];
+            if (!link) return;
+            
+            editingFriendLinkIndex = index;
+            document.getElementById('friend-name-input').value = link.name;
+            document.getElementById('friend-url-input').value = link.url;
+            
+            document.getElementById('add-friend-btn').innerText = '更新友链';
+            document.getElementById('cancel-friend-edit-btn').classList.remove('hidden');
+            
+            renderSettingsFriendLinks();
+        }
+
+        function cancelEditFriendLink() {
+            editingFriendLinkIndex = -1;
+            document.getElementById('friend-name-input').value = '';
+            document.getElementById('friend-url-input').value = '';
+            
+            document.getElementById('add-friend-btn').innerText = '添加友链';
+            document.getElementById('cancel-friend-edit-btn').classList.add('hidden');
+            
+            renderSettingsFriendLinks();
+        }
+
+        function addFriendLink() {
+            const nameInput = document.getElementById('friend-name-input');
+            const urlInput = document.getElementById('friend-url-input');
+            const name = nameInput.value.trim();
+            let url = urlInput.value.trim();
+            
+            if (name && url) {
+                // 简单补全协议
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    url = 'https://' + url;
+                }
+                
+                try {
+                    new URL(url); // 验证 URL 有效性
+                    
+                    if (editingFriendLinkIndex > -1) {
+                        tempFriendLinks[editingFriendLinkIndex] = { name, url };
+                    } else {
+                        tempFriendLinks.push({ name, url });
+                    }
+                    
+                    cancelEditFriendLink();
+                } catch (e) {
+                    alert('请输入有效的网址 (例如: https://example.com)');
+                }
+            }
+        }
+
+        function removeFriendLink(index) {
+            if (index === editingFriendLinkIndex) {
+                cancelEditFriendLink();
+            } else if (index < editingFriendLinkIndex) {
+                editingFriendLinkIndex--;
+            }
+            
+            tempFriendLinks.splice(index, 1);
+            renderSettingsFriendLinks();
+        }
+
+        function renderFriendLinks(links) {
+            const container = document.getElementById('friend-links-container');
+            const section = document.getElementById('friend-links-section');
+            if (!container || !section) return;
+            
+            if (!links || links.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+            
+            section.classList.remove('hidden');
+            container.innerHTML = '';
+            
+            links.forEach(link => {
+                try {
+                    const urlObj = new URL(link.url);
+                    const domain = urlObj.hostname;
+                    const iconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+                    
+                    const card = document.createElement('a');
+                    card.href = link.url;
+                    card.target = '_blank';
+                    card.className = 'bg-white p-3 rounded-xl border shadow-sm hover:shadow-md transition-all flex items-center gap-3 group';
+                    card.innerHTML = `
+                        <div class="h-10 w-10 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-100 group-hover:border-blue-200 transition-colors">
+                            <img src="${iconUrl}" alt="${link.name}" class="h-full w-full object-cover" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(link.name)}&background=random'">
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-medium text-slate-800 truncate group-hover:text-blue-600 transition-colors">${link.name}</div>
+                            <div class="text-xs text-slate-500 truncate">${domain}</div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                } catch (e) {
+                    console.error("Invalid friend link URL:", link.url);
+                }
+            });
+        }
+
+        function toggleBgInput(enabled) {
+            const container = document.getElementById('bg-url-container');
+            if (container) {
+                if (enabled) {
+                    container.classList.remove('opacity-50', 'pointer-events-none');
+                } else {
+                    container.classList.add('opacity-50', 'pointer-events-none');
+                }
+            }
+        }
+
+        async function openSettings() {
+            const modal = document.getElementById('settings-modal');
+            const bgInput = document.getElementById('bg-url-input');
+            const useBgCheckbox = document.getElementById('use-bg-checkbox');
+            const opacityInput = document.getElementById('opacity-input');
+            const loginSection = document.getElementById('login-section');
+            const settingsSection = document.getElementById('settings-content-section');
+            
+            if (modal) {
+                // Check if logged in
+                const token = localStorage.getItem('admin_token');
+                if (!token) {
+                    if (loginSection) loginSection.classList.remove('hidden');
+                    if (settingsSection) settingsSection.classList.add('hidden');
+                } else {
+                    if (loginSection) loginSection.classList.add('hidden');
+                    if (settingsSection) settingsSection.classList.remove('hidden');
+                    
+                    // 每次打开时重新获取最新配置，确保同步
+                    try {
+                        const response = await fetch('/api/config');
+                        if (response.ok) {
+                            currentConfig = await response.json();
+                        }
+                    } catch (err) {
+                        console.error("Error refreshing config on open:", err);
+                    }
+                    
+                    if (bgInput) bgInput.value = currentConfig.backgroundImage || '';
+                    if (useBgCheckbox) {
+                        const useBg = currentConfig.useBackgroundImage === false ? false : true;
+                        useBgCheckbox.checked = useBg;
+                        toggleBgInput(useBg);
+                    }
+                    if (opacityInput) {
+                        const val = currentConfig.cardOpacity !== undefined ? currentConfig.cardOpacity : 1.0;
+                        opacityInput.value = val;
+                        updateOpacityLabel(val);
+                    }
+                    tempFriendLinks = JSON.parse(JSON.stringify(currentConfig.friendLinks || []));
+                    cancelEditFriendLink();
+                }
+                modal.classList.remove('hidden');
+            }
+        }
+
+        async function login() {
+            const passwordInput = document.getElementById('admin-password-input');
+            const password = passwordInput.value;
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    localStorage.setItem('admin_token', result.token);
+                    await openSettings(); // Refresh view
+                } else {
+                    alert('Invalid password');
+                }
+            } catch (err) {
+                console.error("Login error:", err);
+                alert('Login failed');
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+            } catch (err) {
+                console.error("Logout error:", err);
+            }
+            localStorage.removeItem('admin_token');
+            await openSettings(); // Refresh view
+        }
+
+        function closeSettings() {
+            const modal = document.getElementById('settings-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+
+        async function saveSettings() {
+            const bgInput = document.getElementById('bg-url-input');
+            const useBgCheckbox = document.getElementById('use-bg-checkbox');
+            const opacityInput = document.getElementById('opacity-input');
+            const token = localStorage.getItem('admin_token');
+            
+            if (!bgInput || !useBgCheckbox || !opacityInput || !token) return;
+
+            const newBgUrl = bgInput.value.trim();
+            const useBg = useBgCheckbox.checked;
+            const newOpacity = parseFloat(opacityInput.value);
+            console.log('Saving settings, useBg checkbox value:', useBg);
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        backgroundImage: newBgUrl,
+                        useBackgroundImage: useBg,
+                        cardOpacity: newOpacity,
+                        friendLinks: tempFriendLinks
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    currentConfig = result.config; // Update local config
+                    applyBackground(newBgUrl, useBg); // Apply immediately
+                    applyOpacity(newOpacity);
+                    renderFriendLinks(currentConfig.friendLinks);
+                    closeSettings();
+                } else if (response.status === 401) {
+                    alert('Session expired or unauthorized. Please login again.');
+                    logout();
+                } else {
+                    alert('Failed to save settings');
+                }
+            } catch (err) {
+                console.error("Error saving settings:", err);
+                alert('Error saving settings');
+            }
+        }
+
         fetchConfig();
 
         tailwind.config = {
@@ -108,12 +514,89 @@
         <div class="flex items-center justify-between">
             <div>
                 <h1 id="page-header" class="text-3xl font-bold tracking-tight text-slate-900">AcoFork 的 EdgeOne 监控大屏</h1>
-                <p class="text-muted-foreground mt-1">EdgeOne 站点流量与请求量分析</p>
+                <p class="text-muted-foreground mt-1 simple-mode-hidden">EdgeOne 站点流量与请求量分析</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="simple-mode-btn" onclick="toggleSimpleMode()" class="p-2 rounded-full hover:bg-slate-200 transition-colors" title="切换简洁模式">
+                    <!-- Icon will be inserted by JS -->
+                </button>
+                <button onclick="openSettings()" class="p-2 rounded-full hover:bg-slate-200 transition-colors" title="设置">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 hidden">
+            <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between mb-4 flex-shrink-0">
+                    <h2 class="text-lg font-semibold">设置</h2>
+                    <button onclick="closeSettings()" class="text-slate-500 hover:text-slate-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                </div>
+
+                <div class="overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                    <!-- Login Section -->
+                    <div id="login-section" class="space-y-4">
+                        <p class="text-sm text-slate-600">请输入管理员密码以修改设置。</p>
+                        <div>
+                            <label for="admin-password-input" class="block text-sm font-medium text-slate-700 mb-1">密码</label>
+                            <input type="password" id="admin-password-input" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="输入密码...">
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button onclick="closeSettings()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-md hover:bg-slate-200">取消</button>
+                            <button onclick="login()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">登录</button>
+                        </div>
+                    </div>
+
+                    <!-- Settings Content (hidden until login) -->
+                    <div id="settings-content-section" class="space-y-4 hidden">
+                        <div class="flex items-center gap-2 mb-2">
+                            <input type="checkbox" id="use-bg-checkbox" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" onchange="toggleBgInput(this.checked)">
+                            <label for="use-bg-checkbox" class="text-sm font-medium text-slate-700">使用背景图片</label>
+                        </div>
+                        <div id="bg-url-container">
+                            <label for="bg-url-input" class="block text-sm font-medium text-slate-700 mb-1">背景图片 URL</label>
+                            <input type="text" id="bg-url-input" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="输入图片 URL...">
+                        </div>
+                        <div>
+                            <label for="opacity-input" class="block text-sm font-medium text-slate-700 mb-1">卡片透明度：<span id="opacity-value">1.0</span></label>
+                            <input type="range" id="opacity-input" min="0" max="1" step="0.1" value="1.0" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" oninput="updateOpacityLabel(this.value)">
+                        </div>
+                        
+                        <!-- Friend Links Management -->
+                        <div class="border-t pt-4">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">友情链接</label>
+                            <div id="friend-links-settings-list" class="space-y-2 mb-3 max-h-32 overflow-y-auto pr-1">
+                                <!-- Friend links will be listed here -->
+                            </div>
+                            <div class="flex flex-col gap-2">
+                                <div class="flex gap-2">
+                                    <input type="text" id="friend-name-input" class="flex-1 rounded-md border border-slate-300 px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="名称">
+                                    <input type="text" id="friend-url-input" class="flex-[2] rounded-md border border-slate-300 px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="链接">
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="add-friend-btn" onclick="addFriendLink()" class="flex-1 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors">添加友链</button>
+                                    <button id="cancel-friend-edit-btn" onclick="cancelEditFriendLink()" class="hidden flex-1 py-1.5 bg-slate-200 text-slate-700 text-sm rounded hover:bg-slate-300 transition-colors">取消</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center pt-2 border-t mt-4">
+                            <button onclick="logout()" class="text-xs text-red-600 hover:underline">退出登录</button>
+                            <div class="flex gap-2">
+                                <button onclick="closeSettings()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-md hover:bg-slate-200">取消</button>
+                                <button onclick="saveSettings()" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">保存修改</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Time Controls -->
-        <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border shadow-sm">
+        <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border shadow-sm no-hover">
             <div class="flex items-center space-x-2">
                 <label for="timeRange" class="text-sm font-medium">时间范围:</label>
                 <select id="timeRange" onchange="refreshData()" class="h-9 w-[180px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900">
@@ -149,7 +632,7 @@
 
             <!-- Section 1: Traffic (流量) -->
             <div class="space-y-4">
-                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2 simple-mode-hidden">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
                     流量分析 (Traffic)
                 </h2>
@@ -198,7 +681,7 @@
 
             <!-- Section 2: Bandwidth (带宽) -->
             <div class="space-y-4">
-                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2 simple-mode-hidden">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     带宽分析 (Bandwidth)
                 </h2>
@@ -247,7 +730,7 @@
 
             <!-- Section 3: Origin Pull Analysis (回源分析) -->
             <div class="space-y-4">
-                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2 simple-mode-hidden">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
                     回源分析 (Origin Pull Analysis)
                 </h2>
@@ -320,7 +803,7 @@
 
             <!-- Section 4: Requests & Performance (请求与性能) -->
             <div class="space-y-4">
-                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2 simple-mode-hidden">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     请求与性能 (Requests & Performance)
                 </h2>
@@ -379,7 +862,7 @@
             </div>
 
             <!-- Section 5: Top Analysis (TOP 分析) -->
-            <div class="space-y-4">
+            <div class="space-y-4 simple-mode-hidden">
                 <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                     TOP 分析 (Top Analysis)
@@ -605,9 +1088,20 @@
 
         </div>
 
+        <!-- Friend Links -->
+        <div id="friend-links-section" class="space-y-4 hidden">
+            <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.826a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.103-1.103"></path></svg>
+                友链 (Links)
+            </h2>
+            <div id="friend-links-container" class="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+                <!-- Friend links will be rendered here -->
+            </div>
+        </div>
+
         <!-- Footer -->
         <div class="flex justify-center items-center pt-8 pb-4 text-sm text-muted-foreground">
-            Powered By <a href="https://2x.nz" target="_blank" class="ml-1 font-medium underline underline-offset-4 hover:text-primary">AcoFork</a>
+            Powered By <a href="https://github.com/afoim" target="_blank" class="ml-1 font-medium underline underline-offset-4 hover:text-primary">afoim</a>
         </div>
 
     </div>

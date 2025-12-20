@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node node-functions/api/[[default]].js"
+    "start": "node local-server.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",

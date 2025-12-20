@@ -1,0 +1,15 @@
+{
+  "backgroundImage": "https://t.alcy.cc/ycy",
+  "useBackgroundImage": false,
+  "friendLinks": [
+    {
+      "name": "wuxi",
+      "url": "https://blog.w-x.me"
+    },
+    {
+      "name": "二叉树树",
+      "url": "https://2x.nz"
+    }
+  ],
+  "cardOpacity": 0.6
+}
