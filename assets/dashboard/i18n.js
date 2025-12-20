@@ -204,8 +204,8 @@ const MESSAGES = {
       pagesRequests: '请求数',
     },
     footer: {
-      poweredBy: 'Powered By',
-      githubProject: 'GitHub Project',
+      statementHtml:
+        '由 <a href="https://github.com/afoim/eo_monitior" target="_blank" rel="noopener noreferrer" class="font-medium underline underline-offset-4 hover:text-primary">EdgeOne Monitoring Dashboard</a> 提供支持。由 <a href="https://2x.nz" target="_blank" rel="noopener noreferrer" class="font-medium underline underline-offset-4 hover:text-primary">Acofork</a> 构建，并由社区以热情持续维护。',
     },
   },
   'en-US': {
@@ -360,8 +360,8 @@ const MESSAGES = {
       pagesRequests: 'Requests',
     },
     footer: {
-      poweredBy: 'Powered By',
-      githubProject: 'GitHub Project',
+      statementHtml:
+        'Powered by <a href="https://github.com/afoim/eo_monitior" target="_blank" rel="noopener noreferrer" class="font-medium underline underline-offset-4 hover:text-primary">EdgeOne Monitoring Dashboard</a>. Built by <a href="https://2x.nz" target="_blank" rel="noopener noreferrer" class="font-medium underline underline-offset-4 hover:text-primary">Acofork</a> and maintained with passion by the community.',
     },
   },
 };
@@ -430,6 +430,11 @@ export function t(key, vars) {
 
 export function applyTranslations(root = document) {
   if (!root?.querySelectorAll) return;
+  root.querySelectorAll('[data-i18n-html]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-html');
+    if (!key) return;
+    el.innerHTML = t(key);
+  });
   root.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
     if (!key) return;
