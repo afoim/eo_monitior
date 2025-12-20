@@ -100,24 +100,55 @@
             --ring: 222.2 84% 4.9%;
             --radius: 0.5rem;
         }
+        
+        .dark {
+            --background: 222.2 84% 4.9%;
+            --foreground: 210 40% 98%;
+            --card: 222.2 84% 4.9%;
+            --card-foreground: 210 40% 98%;
+            --popover: 222.2 84% 4.9%;
+            --popover-foreground: 210 40% 98%;
+            --primary: 210 40% 98%;
+            --primary-foreground: 222.2 47.4% 11.2%;
+            --secondary: 217.2 32.6% 17.5%;
+            --secondary-foreground: 210 40% 98%;
+            --muted: 217.2 32.6% 17.5%;
+            --muted-foreground: 215 20.2% 65.1%;
+            --accent: 217.2 32.6% 17.5%;
+            --accent-foreground: 210 40% 98%;
+            --destructive: 0 62.8% 30.6%;
+            --destructive-foreground: 210 40% 98%;
+            --border: 217.2 32.6% 17.5%;
+            --input: 217.2 32.6% 17.5%;
+            --ring: 212.7 26.8% 83.9%;
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen p-8">
+<body class="bg-background min-h-screen p-8">
     <div class="max-w-7xl mx-auto space-y-8">
         
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 id="page-header" class="text-3xl font-bold tracking-tight text-slate-900">AcoFork 的 EdgeOne 监控大屏</h1>
+                <h1 id="page-header" class="text-3xl font-bold tracking-tight text-foreground">AcoFork 的 EdgeOne 监控大屏</h1>
                 <p class="text-muted-foreground mt-1">EdgeOne 站点流量与请求量分析</p>
+            </div>
+            <!-- Theme Switcher -->
+            <div class="flex items-center space-x-2">
+                <label for="theme-select" class="text-sm font-medium">主题:</label>
+                <select id="theme-select" onchange="handleThemeChange()" class="h-9 w-[150px] rounded-md border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-card-foreground">
+                    <option value="light">浅色</option>
+                    <option value="dark">深色</option>
+                    <option value="system">跟随系统</option>
+                </select>
             </div>
         </div>
 
         <!-- Time Controls -->
-        <div class="flex flex-wrap items-center gap-4 bg-white p-4 rounded-xl border shadow-sm">
+        <div class="flex flex-wrap items-center gap-4 bg-card p-4 rounded-xl border shadow-sm">
             <div class="flex items-center space-x-2">
                 <label for="timeRange" class="text-sm font-medium">时间范围:</label>
-                <select id="timeRange" onchange="handleTimeRangeChange()" class="h-9 w-[180px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900">
+                <select id="timeRange" onchange="handleTimeRangeChange()" class="h-9 w-[180px] rounded-md border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-card-foreground">
                     <option value="30min">近 30 分钟</option>
                     <option value="1h">近 1 小时</option>
                     <option value="6h">近 6 小时</option>
@@ -133,27 +164,27 @@
             <!-- Custom Time Inputs -->
             <div id="customTimeInputs" class="hidden flex-wrap items-center gap-2 mt-2 w-full sm:w-auto">
                 <div class="flex items-center space-x-1">
-                    <input type="number" id="customDays" placeholder="0" class="h-8 w-16 rounded-md border border-slate-200 px-2 text-sm" min="0" max="31">
+                    <input type="number" id="customDays" placeholder="0" class="h-8 w-16 rounded-md border border-border bg-card px-2 text-sm text-card-foreground" min="0" max="31">
                     <span class="text-xs">天</span>
                 </div>
                 <div class="flex items-center space-x-1">
-                    <input type="number" id="customHours" placeholder="0" class="h-8 w-16 rounded-md border border-slate-200 px-2 text-sm" min="0" max="23">
+                    <input type="number" id="customHours" placeholder="0" class="h-8 w-16 rounded-md border border-border bg-card px-2 text-sm text-card-foreground" min="0" max="23">
                     <span class="text-xs">小时</span>
                 </div>
                 <div class="flex items-center space-x-1">
-                    <input type="number" id="customMinutes" placeholder="0" class="h-8 w-16 rounded-md border border-slate-200 px-2 text-sm" min="0" max="59">
+                    <input type="number" id="customMinutes" placeholder="0" class="h-8 w-16 rounded-md border border-border bg-card px-2 text-sm text-card-foreground" min="0" max="59">
                     <span class="text-xs">分</span>
                 </div>
                 <div class="flex items-center space-x-1">
-                    <input type="number" id="customSeconds" placeholder="0" class="h-8 w-16 rounded-md border border-slate-200 px-2 text-sm" min="0" max="59">
+                    <input type="number" id="customSeconds" placeholder="0" class="h-8 w-16 rounded-md border border-border bg-card px-2 text-sm text-card-foreground" min="0" max="59">
                     <span class="text-xs">秒</span>
                 </div>
-                <button onclick="refreshData()" class="h-8 px-3 bg-slate-900 text-white rounded-md text-xs hover:bg-slate-800">应用</button>
+                <button onclick="refreshData()" class="h-8 px-3 bg-primary text-primary-foreground rounded-md text-xs hover:bg-primary/90">应用</button>
                 <span id="timeRangeError" class="text-red-500 text-xs font-medium ml-2"></span>
             </div>
             <div class="flex items-center space-x-2">
                 <label for="interval" class="text-sm font-medium">粒度:</label>
-                <select id="interval" onchange="refreshData()" class="h-9 w-[180px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900">
+                <select id="interval" onchange="refreshData()" class="h-9 w-[180px] rounded-md border border-border bg-card px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-card-foreground">
                     <option value="auto" selected>自动</option>
                     <option value="min">1 分钟</option>
                     <option value="5min">5 分钟</option>
@@ -171,7 +202,7 @@
 
             <!-- Section 1: Traffic (流量) -->
             <div class="space-y-4">
-                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <h2 class="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
                     流量分析 (Traffic)
                 </h2>
@@ -220,7 +251,7 @@
 
             <!-- Section 2: Bandwidth (带宽) -->
             <div class="space-y-4">
-                <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                <h2 class="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     带宽分析 (Bandwidth)
                 </h2>
@@ -1214,6 +1245,56 @@
             updateSecuritySection(results); //5.1
             updateTopAnalysisSection(results); //6.
         }
+
+        // Theme Switching Functions
+        function handleThemeChange() {
+            const themeSelect = document.getElementById('theme-select');
+            const theme = themeSelect.value;
+            applyTheme(theme);
+        }
+
+        function applyTheme(theme) {
+            const html = document.documentElement;
+            const themeSelect = document.getElementById('theme-select');
+            
+            // Remove existing dark class
+            html.classList.remove('dark');
+            
+            if (theme === 'dark') {
+                html.classList.add('dark');
+            } else if (theme === 'system') {
+                const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (isDarkMode) {
+                    html.classList.add('dark');
+                }
+            }
+            
+            // Save theme preference
+            localStorage.setItem('theme', theme);
+            
+            // Update select value if different
+            if (themeSelect.value !== theme) {
+                themeSelect.value = theme;
+            }
+        }
+
+        function initTheme() {
+            // Get saved theme or use system preference
+            const savedTheme = localStorage.getItem('theme');
+            const theme = savedTheme || 'system';
+            applyTheme(theme);
+        }
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'system') {
+                applyTheme('system');
+            }
+        });
+
+        // Initialize theme on page load
+        document.addEventListener('DOMContentLoaded', initTheme);
 
         //1.有使用
         function updateTrafficSection(results) {
