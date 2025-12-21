@@ -4,7 +4,8 @@
 > 提示：本项目已全面支持腾讯云 EdgeOne 全球版（中国站与国际站账号均可直接使用）。
 
 ### 效果图
-<img width="989" height="1292" alt="image" src="https://github.com/user-attachments/assets/7488cd79-df76-43f3-aab0-193dab53e56c" />
+<img width="2087" height="11971" alt="image" src="https://github.com/user-attachments/assets/cc71dc11-8a5d-4d59-9543-e0dbabac4b33" />
+
 
 
 这是一个基于 Tencent Cloud EdgeOne API 构建的实时监控大屏，旨在提供直观的流量和请求分析。
