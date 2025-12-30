@@ -137,6 +137,32 @@ app.get('/zones', async (req, res) => {
     }
 });
 
+// 新增：获取站点下的所有加速域名
+app.get('/domains', async (req, res) => {
+    try {
+        const { secretId, secretKey } = getKeys();
+        const { zoneId } = req.query;
+
+        if (!secretId || !secretKey) {
+            return res.status(500).json({ error: "Missing credentials" });
+        }
+
+        const TeoClient = teo.v20220901.Client;
+        const client = new TeoClient({
+            credential: { secretId, secretKey },
+            region: "ap-guangzhou",
+            profile: { httpProfile: { endpoint: "teo.tencentcloudapi.com" } }
+        });
+
+        const params = zoneId && zoneId !== '*' ? { ZoneId: zoneId } : {};
+        const data = await client.DescribeAccelerationDomains(params);
+        res.json(data);
+    } catch (err) {
+        console.error("Error fetching domains:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/pages/build-count', async (req, res) => {
     try {
         const { secretId, secretKey } = getKeys();
@@ -434,6 +460,7 @@ app.get('/traffic', async (req, res) => {
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
         const metric = req.query.metric || "l7Flow_flux";
+        const domain = req.query.domain;
         const startTime = req.query.startTime || formatDate(yesterday);
         const endTime = req.query.endTime || formatDate(now);
         const interval = req.query.interval;
@@ -453,6 +480,9 @@ app.get('/traffic', async (req, res) => {
                 "MetricName": metric,
                 "ZoneIds": zoneIds
             };
+            if (domain && domain !== '*') {
+                params["Filters"] = [{ Name: "domain", Values: [domain] }];
+            }
             console.log("Calling DescribeTopL7AnalysisData with params:", JSON.stringify(params, null, 2));
             data = await client.DescribeTopL7AnalysisData(params);
         } else if (SECURITY_METRICS.includes(metric)) {
@@ -544,6 +574,9 @@ app.get('/traffic', async (req, res) => {
 
             if (interval && interval !== 'auto') {
                 params["Interval"] = interval;
+            }
+            if (domain && domain !== '*') {
+                params["Filters"] = [{ Name: "domain", Values: [domain] }];
             }
             
             console.log("Calling Timing API with params:", JSON.stringify(params, null, 2));
