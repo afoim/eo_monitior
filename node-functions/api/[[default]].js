@@ -96,6 +96,13 @@ const FUNCTION_METRICS = [
     'function_cpuCostTime'
 ];
 
+function buildDomainFilters(domain) {
+    if (!domain || domain === '*') {
+        return undefined;
+    }
+    return [{ Key: "domain", Operator: "equals", Value: [domain] }];
+}
+
 app.get('/config', (req, res) => {
     res.json({
         siteName: process.env.SITE_NAME || '茶茶吖 的 EdgeOne 监控大屏',
@@ -472,6 +479,8 @@ app.get('/traffic', async (req, res) => {
 
         console.log(`Requesting metric: ${metric}, StartTime: ${startTime}, EndTime: ${endTime}, Interval: ${interval}`);
 
+        const domainFilters = buildDomainFilters(domain);
+
         if (TOP_ANALYSIS_METRICS.includes(metric)) {
             // API: DescribeTopL7AnalysisData
             params = {
@@ -480,8 +489,8 @@ app.get('/traffic', async (req, res) => {
                 "MetricName": metric,
                 "ZoneIds": zoneIds
             };
-            if (domain && domain !== '*') {
-                params["Filters"] = [{ Name: "domain", Values: [domain] }];
+            if (domainFilters) {
+                params["Filters"] = domainFilters;
             }
             console.log("Calling DescribeTopL7AnalysisData with params:", JSON.stringify(params, null, 2));
             data = await client.DescribeTopL7AnalysisData(params);
@@ -575,8 +584,8 @@ app.get('/traffic', async (req, res) => {
             if (interval && interval !== 'auto') {
                 params["Interval"] = interval;
             }
-            if (domain && domain !== '*') {
-                params["Filters"] = [{ Name: "domain", Values: [domain] }];
+            if (domainFilters) {
+                params["Filters"] = domainFilters;
             }
             
             console.log("Calling Timing API with params:", JSON.stringify(params, null, 2));
