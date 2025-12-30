@@ -96,10 +96,17 @@ const FUNCTION_METRICS = [
     'function_cpuCostTime'
 ];
 
+function buildDomainFilters(domain) {
+    if (!domain || domain === '*') {
+        return undefined;
+    }
+    return [{ Key: "domain", Operator: "equals", Value: [domain] }];
+}
+
 app.get('/config', (req, res) => {
     res.json({
-        siteName: process.env.SITE_NAME || 'AcoFork 的 EdgeOne 监控大屏',
-        siteIcon: process.env.SITE_ICON || 'https://q2.qlogo.cn/headimg_dl?dst_uin=2726730791&spec=0'
+        siteName: process.env.SITE_NAME || '茶茶吖 的 EdgeOne 监控大屏',
+        siteIcon: process.env.SITE_ICON || 'https://blog.ccya.top/logo.svg'
     });
 });
 
@@ -133,6 +140,32 @@ app.get('/zones', async (req, res) => {
         res.json(data);
     } catch (err) {
         console.error("Error calling DescribeZones:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 新增：获取站点下的所有加速域名
+app.get('/domains', async (req, res) => {
+    try {
+        const { secretId, secretKey } = getKeys();
+        const { zoneId } = req.query;
+
+        if (!secretId || !secretKey) {
+            return res.status(500).json({ error: "Missing credentials" });
+        }
+
+        const TeoClient = teo.v20220901.Client;
+        const client = new TeoClient({
+            credential: { secretId, secretKey },
+            region: "ap-guangzhou",
+            profile: { httpProfile: { endpoint: "teo.tencentcloudapi.com" } }
+        });
+
+        const params = zoneId && zoneId !== '*' ? { ZoneId: zoneId } : {};
+        const data = await client.DescribeAccelerationDomains(params);
+        res.json(data);
+    } catch (err) {
+        console.error("Error fetching domains:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -434,6 +467,7 @@ app.get('/traffic', async (req, res) => {
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
         const metric = req.query.metric || "l7Flow_flux";
+        const domain = req.query.domain;
         const startTime = req.query.startTime || formatDate(yesterday);
         const endTime = req.query.endTime || formatDate(now);
         const interval = req.query.interval;
@@ -445,6 +479,8 @@ app.get('/traffic', async (req, res) => {
 
         console.log(`Requesting metric: ${metric}, StartTime: ${startTime}, EndTime: ${endTime}, Interval: ${interval}`);
 
+        const domainFilters = buildDomainFilters(domain);
+
         if (TOP_ANALYSIS_METRICS.includes(metric)) {
             // API: DescribeTopL7AnalysisData
             params = {
@@ -453,6 +489,9 @@ app.get('/traffic', async (req, res) => {
                 "MetricName": metric,
                 "ZoneIds": zoneIds
             };
+            if (domainFilters) {
+                params["Filters"] = domainFilters;
+            }
             console.log("Calling DescribeTopL7AnalysisData with params:", JSON.stringify(params, null, 2));
             data = await client.DescribeTopL7AnalysisData(params);
         } else if (SECURITY_METRICS.includes(metric)) {
@@ -544,6 +583,9 @@ app.get('/traffic', async (req, res) => {
 
             if (interval && interval !== 'auto') {
                 params["Interval"] = interval;
+            }
+            if (domainFilters) {
+                params["Filters"] = domainFilters;
             }
             
             console.log("Calling Timing API with params:", JSON.stringify(params, null, 2));

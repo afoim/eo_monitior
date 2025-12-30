@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" href="https://q2.qlogo.cn/headimg_dl?dst_uin=2726730791&spec=0">
+    <link rel="icon" href="https://blog.ccya.top/logo.svg">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AcoFork 的 EdgeOne 监控大屏</title>
+    <title>茶茶吖 的 EdgeOne 监控大屏</title>
     <!-- Tailwind CSS for Shadcn/UI style -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -116,7 +116,7 @@
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 id="page-header" class="text-3xl font-bold tracking-tight text-slate-900">AcoFork 的 EdgeOne 监控大屏</h1>
+                <h1 id="page-header" class="text-3xl font-bold tracking-tight text-slate-900">茶茶吖 的 EdgeOne 监控大屏</h1>
                 <p class="text-muted-foreground mt-1">EdgeOne 站点流量与请求量分析</p>
             </div>
         </div>
@@ -171,8 +171,14 @@
             </div>
             <div class="flex items-center space-x-2">
                 <label for="zoneId" class="text-sm font-medium">选择站点:</label>
-                <select id="zoneId" onchange="refreshData()" class="h-9 w-[240px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900">
+                <select id="zoneId" onchange="handleZoneChange()" class="h-9 w-[240px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900">
                      <option value="*">加载中...</option>
+                </select>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label for="domainSelect" class="text-sm font-medium">选择域名:</label>
+                <select id="domainSelect" onchange="refreshData()" class="h-9 w-[240px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm disabled:opacity-50" disabled>
+                    <option value="*">全部域名</option>
                 </select>
             </div>
             <!-- <button onclick="refreshData()" class="h-9 px-4 py-2 bg-slate-900 text-white hover:bg-slate-900/90 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 shadow">
@@ -1203,6 +1209,8 @@
 
                 const interval = document.getElementById('interval').value;
                 const zoneId = document.getElementById('zoneId').value.trim();
+                const domainSelect = document.getElementById('domainSelect');
+                const domain = domainSelect ? domainSelect.value.trim() : '*';
                 
                 let url = `/api/traffic?metric=${metric}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}`;
                 if (interval && interval !== 'auto') {
@@ -1210,6 +1218,9 @@
                 }
                 if (zoneId) {
                     url += `&zoneId=${encodeURIComponent(zoneId)}`;
+                }
+                if (zoneId && zoneId !== '*' && domain && domain !== '*') {
+                    url += `&domain=${encodeURIComponent(domain)}`;
                 }
 
                 const response = await fetch(url);
@@ -1399,6 +1410,7 @@
                     select.value = "*";
                 }
 
+                await fetchDomains(select.value);
             } catch (err) {
                 console.error("Error fetching zones:", err);
                 const select = document.getElementById('zoneId');
@@ -1406,7 +1418,47 @@
                 if (select.options.length === 0 || select.options[0].value !== '*') {
                      select.innerHTML = '<option value="*">获取站点失败 (默认为全部)</option>';
                 }
+                await fetchDomains("*");
             }
+        }
+
+        async function fetchDomains(zoneId) {
+            const select = document.getElementById('domainSelect');
+            if (!select) return;
+
+            if (!zoneId || zoneId === '*') {
+                select.innerHTML = '<option value="*">全部域名</option>';
+                select.disabled = true;
+                return;
+            }
+
+            try {
+                select.disabled = false;
+                select.innerHTML = '<option value="*">加载中...</option>';
+
+                const response = await fetch(`/api/domains?zoneId=${encodeURIComponent(zoneId)}`);
+                const result = await response.json();
+
+                select.innerHTML = '<option value="*">全部域名</option>';
+                if (result.AccelerationDomains && result.AccelerationDomains.length > 0) {
+                    result.AccelerationDomains.forEach(domain => {
+                        const option = document.createElement('option');
+                        option.value = domain.DomainName;
+                        option.text = domain.DomainName;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.error("Error fetching domains:", err);
+                select.innerHTML = '<option value="*">获取域名失败 (默认为全部)</option>';
+                select.disabled = true;
+            }
+        }
+
+        async function handleZoneChange() {
+            const zoneId = document.getElementById('zoneId').value.trim();
+            await fetchDomains(zoneId);
+            refreshData();
         }
 
         ////ENTRANCE////
