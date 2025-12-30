@@ -36,8 +36,8 @@
 4. 在 **环境变量 (Environment Variables)** 中添加以下配置：
    - `SECRET_ID`: 您的腾讯云 SecretId
    - `SECRET_KEY`: 您的腾讯云 SecretKey
-   - `SITE_NAME`: (可选) 自定义大屏标题，默认为 "AcoFork 的 EdgeOne 监控大屏"
-   - `SITE_ICON`: (可选) 自定义网页图标，默认为 "https://q2.qlogo.cn/headimg_dl?dst_uin=2726730791&spec=0"
+   - `SITE_NAME`: 大屏标题，固定为 "茶茶吖 的 EdgeOne 监控大屏"
+   - `SITE_ICON`: 网页图标，固定为 "https://blog.ccya.top/logo.svg"
 5. 部署项目。
 
 ### 方式二：本地运行 / Node.js 环境
