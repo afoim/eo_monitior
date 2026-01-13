@@ -2400,34 +2400,28 @@
         }
 
         //通用处理
-        const renderTopChart = (results, chartInstance, metricName, mapObject = null) => {
+        const renderTopChart = (results, chartInstance, metricName, mapObject = null, config = {}) => {
+            const { keyFormatter, tooltipValueFormatter, axisLabelFormatter } = config;
             const data = results[metricName];
 
             if (!data || data.type !== 'top' || !data.data) return;
 
             const sortedData = [...data.data].sort((a, b) => b.Value - a.Value).slice(0, 10);
-            
-            let unit = '';
-            let divisor = 1;
-            let label = metricLabels[metricName] || '';
-            
-            if (metricName.includes('outFlux')) {
-                const maxVal = sortedData.length > 0 ? sortedData[0].Value : 0;
-                const best = getBestUnit(maxVal, 'bytes');
-                unit = best.unit;
-                divisor = best.divisor;
-            } else {
-                const maxVal = sortedData.length > 0 ? sortedData[0].Value : 0;
-                const best = getBestCountUnit(maxVal);
-                unit = best.unit;
-                divisor = best.divisor;
-            }
 
-            const yAxisData = sortedData.map(item => mapObject?.[item.Key] || item.Key).reverse(); //问题点：没对“字段不存在”的短横杠做判断
-            const seriesData = sortedData.map(item => {
-                const val = item.Value / divisor;
-                return (divisor === 1) ? val : val.toFixed(2);
+            const unitInfo = metricName.includes('outFlux')
+                ? getBestUnit(sortedData[0]?.Value || 0, 'bytes')
+                : getBestCountUnit(sortedData[0]?.Value || 0);
+
+            const yAxisData = sortedData.map(item => {
+                const mapped = mapObject?.[item.Key] || item.Key;
+                return keyFormatter ? keyFormatter(mapped) : mapped;
             }).reverse();
+
+            const rawSeriesData = sortedData.map(item => item.Value).reverse();
+            const seriesData = rawSeriesData.map(val => {
+                const converted = val / unitInfo.divisor;
+                return unitInfo.divisor === 1 ? converted : converted.toFixed(2);
+            });
 
             let color = '#3b82f6';
             const lowerName = metricName.toLowerCase();
@@ -2443,41 +2437,32 @@
                     trigger: 'axis',
                     axisPointer: { type: 'shadow' },
                     formatter: (params) => {
-                         const param = params[0];
-                         let name = param.name;
-                         if (name.length > 100) name = name.substring(0, 100) + '...';
-                         
-                         const rawVal = sortedData[sortedData.length - 1 - param.dataIndex].Value;
-                         
-                         let formattedVal = '';
-                         if (metricName.includes('outFlux')) {
-                             formattedVal = formatBytes(rawVal);
-                         } else {
-                             const fVal = formatCount(rawVal);
-                             // Append '次' if not present in unit (formatCount returns unit, but we might want explicit '次')
-                             // formatCount returns "1.23 万". "1.23 万次" sounds good.
-                             // "500" -> "500 次".
-                             formattedVal = fVal + (fVal.includes('千') || fVal.includes('万') || fVal.includes('亿') ? '次' : ' 次');
-                         }
-                         
-                         return `${name}<br/>${param.marker}${label}: ${formattedVal}`;
+                        const param = params[0];
+                        const rawVal = rawSeriesData[param.dataIndex];
+                        let formattedVal;
+                        if (tooltipValueFormatter) {
+                            formattedVal = tooltipValueFormatter(rawVal, metricName);
+                        } else if (metricName.includes('outFlux')) {
+                            formattedVal = formatBytes(rawVal);
+                        } else {
+                            const fVal = formatCount(rawVal);
+                            formattedVal = fVal + (fVal.includes('千') || fVal.includes('万') || fVal.includes('亿') ? '次' : ' 次');
+                        }
+                        return `${param.name}<br/>${param.marker}${metricLabels[metricName] || ''}: ${formattedVal}`;
                     }
                 },
                 grid: { left: '3%', right: '10%', bottom: '3%', containLabel: true },
-                xAxis: { type: 'value', name: unit },
-                yAxis: { 
-                    type: 'category', 
+                xAxis: { type: 'value', name: unitInfo.unit },
+                yAxis: {
+                    type: 'category',
                     data: yAxisData,
                     axisLabel: {
-                        formatter: function (value) {
-                            if (value.length > 20) return value.substring(0, 20) + '...';
-                            return value;
-                        }
+                        formatter: axisLabelFormatter || ((value) => value.length > 20 ? value.substring(0, 20) + '...' : value)
                     }
                 },
                 series: [
                     {
-                        name: label,
+                        name: metricLabels[metricName] || '',
                         type: 'bar',
                         data: seriesData,
                         itemStyle: { color: color },
@@ -2550,34 +2535,53 @@
             updateTopMapChart(results);
 
             // Flux Charts
+            const truncate20 = (val) => val.length > 20 ? val.substring(0, 20) + '...' : val;
+            const truncate50 = (val) => val.length > 50 ? val.substring(0, 50) + '...' : val;
+            const refererFormatter = (key) => {
+                const cleaned = (key || '').replace(/`/g, '').trim();
+                return cleaned && cleaned !== '-' ? cleaned : '字段不存在';
+            };
+            const refererAxisFormatter = (val) => truncate50(refererFormatter(val));
+            const refererTooltipFormatter = (raw) => {
+                const formatted = formatCount(raw);
+                return formatted + (formatted.includes('千') || formatted.includes('万') || formatted.includes('亿') ? '次' : ' 次');
+            };
+
+            // Flux Charts
             renderTopChart(results, chartTopCountry, 'l7Flow_outFlux_country', countryMap);
             renderTopChart(results, chartTopProvince, 'l7Flow_outFlux_province', provinceMap);
-            renderTopChart(results, chartTopStatusCode, 'l7Flow_outFlux_statusCode');
-            renderTopChart(results, chartTopDomain, 'l7Flow_outFlux_domain');
-            renderTopChart(results, chartTopUrl, 'l7Flow_outFlux_url');
+            renderTopChart(results, chartTopStatusCode, 'l7Flow_outFlux_statusCode', null, { axisLabelFormatter: truncate20 });
+            renderTopChart(results, chartTopDomain, 'l7Flow_outFlux_domain', null, { axisLabelFormatter: truncate50 });
+            renderTopChart(results, chartTopUrl, 'l7Flow_outFlux_url', null, { axisLabelFormatter: truncate50 });
             renderTopChart(results, chartTopResourceType, 'l7Flow_outFlux_resourceType');
             renderTopChart(results, chartTopSip, 'l7Flow_outFlux_sip');
-            //renderTopChart(results, chartTopReferer, 'l7Flow_outFlux_referers'); //以前方案
-            updateTopRefererChart(results); //降级处理，包含“字段不存在”处理
+            renderTopChart(results, chartTopReferer, 'l7Flow_outFlux_referers', null, {
+                keyFormatter: refererFormatter,
+                axisLabelFormatter: refererAxisFormatter,
+                tooltipValueFormatter: (raw) => formatBytes(raw)
+            });
             renderTopChart(results, chartTopUaDevice, 'l7Flow_outFlux_ua_device');
             renderTopChart(results, chartTopUaBrowser, 'l7Flow_outFlux_ua_browser');
             renderTopChart(results, chartTopUaOs, 'l7Flow_outFlux_ua_os');
-            renderTopChart(results, chartTopUa, 'l7Flow_outFlux_ua');
+            renderTopChart(results, chartTopUa, 'l7Flow_outFlux_ua', null, { axisLabelFormatter: truncate50 });
 
             // Request Charts
             renderTopChart(results, chartTopRequestCountry, 'l7Flow_request_country', countryMap);
             renderTopChart(results, chartTopRequestProvince, 'l7Flow_request_province', provinceMap);
-            renderTopChart(results, chartTopRequestStatusCode, 'l7Flow_request_statusCode');
-            renderTopChart(results, chartTopRequestDomain, 'l7Flow_request_domain');
-            renderTopChart(results, chartTopRequestUrl, 'l7Flow_request_url');
+            renderTopChart(results, chartTopRequestStatusCode, 'l7Flow_request_statusCode', null, { axisLabelFormatter: truncate20 });
+            renderTopChart(results, chartTopRequestDomain, 'l7Flow_request_domain', null, { axisLabelFormatter: truncate50 });
+            renderTopChart(results, chartTopRequestUrl, 'l7Flow_request_url', null, { axisLabelFormatter: truncate50 });
             renderTopChart(results, chartTopRequestResourceType, 'l7Flow_request_resourceType');
             renderTopChart(results, chartTopRequestSip, 'l7Flow_request_sip');
-            //renderTopChart(results, chartTopRequestReferer, 'l7Flow_request_referers');
-            updateTopRequestRefererChart(results); //降级方案
+            renderTopChart(results, chartTopRequestReferer, 'l7Flow_request_referers', null, {
+                keyFormatter: refererFormatter,
+                axisLabelFormatter: refererAxisFormatter,
+                tooltipValueFormatter: refererTooltipFormatter
+            });
             renderTopChart(results, chartTopRequestUaDevice, 'l7Flow_request_ua_device');
             renderTopChart(results, chartTopRequestUaBrowser, 'l7Flow_request_ua_browser');
             renderTopChart(results, chartTopRequestUaOs, 'l7Flow_request_ua_os');
-            renderTopChart(results, chartTopRequestUa, 'l7Flow_request_ua');
+            renderTopChart(results, chartTopRequestUa, 'l7Flow_request_ua', null, { axisLabelFormatter: truncate50 });
         }
 
 
