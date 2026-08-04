@@ -238,6 +238,82 @@
                 </div>
             </div>
 
+            <!-- Section 1.5: Domain Intercept Analysis (域名拦截分析) -->
+            <div id="security-intercept-section" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V7l7-4z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.5 12l1.7 1.7 3.6-3.6"></path></svg>
+                        域名拦截分析 (Domain Protection)
+                    </h2>
+                    <span id="security-intercept-scope" class="text-xs text-muted-foreground" aria-live="polite">请选择具体域名</span>
+                </div>
+
+                <div id="security-intercept-empty" class="rounded-xl border bg-white p-6 text-sm text-slate-500" aria-live="polite">
+                    <p id="security-intercept-message">请选择具体域名查看拦截 IP、地区、请求路径和次数。</p>
+                </div>
+
+                <div id="security-intercept-content" class="hidden space-y-4">
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                                <h3 class="tracking-tight text-sm font-medium text-muted-foreground">防护处置请求</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div class="text-2xl font-bold" id="security_intercept_total">-</div>
+                                <p class="text-xs text-muted-foreground mt-1">包含拦截与挑战请求</p>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                                <h3 class="tracking-tight text-sm font-medium text-muted-foreground">最高频来源 IP</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div class="text-xl font-bold break-all" id="security_intercept_top_ip">-</div>
+                                <p class="text-xs text-muted-foreground mt-1" id="security_intercept_top_ip_count">-</p>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                                <h3 class="tracking-tight text-sm font-medium text-muted-foreground">最高频请求路径</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div class="text-xl font-bold break-all" id="security_intercept_top_path">-</div>
+                                <p class="text-xs text-muted-foreground mt-1" id="security_intercept_top_path_count">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="flex flex-col space-y-1.5 p-6">
+                                <h3 class="font-semibold leading-none tracking-tight">被拦截 IP Top 10</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div id="chart_security_intercept_ip" class="w-full h-[320px]"></div>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="flex flex-col space-y-1.5 p-6">
+                                <h3 class="font-semibold leading-none tracking-tight">来源地区 Top 10</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div id="chart_security_intercept_region" class="w-full h-[320px]"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                        <div class="flex flex-col space-y-1.5 p-6">
+                            <h3 class="font-semibold leading-none tracking-tight">被拦截请求路径 Top 10</h3>
+                        </div>
+                        <div class="p-6 pt-0">
+                            <div id="chart_security_intercept_path" class="w-full h-[350px]"></div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-muted-foreground">统计口径：EdgeOne Web 防护处置请求，数据通常有约 10 分钟延迟。</p>
+                </div>
+            </div>
+
             <!-- Section 2: Bandwidth (带宽) -->
             <div class="space-y-4">
                 <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
@@ -832,6 +908,9 @@
     <script>
         // ECharts instance variables
         let chartTraffic = null;
+        let chartSecurityInterceptIp = null;
+        let chartSecurityInterceptRegion = null;
+        let chartSecurityInterceptPath = null;
         let chartBandwidth = null;
         let chartRequests = null;
         let chartPerformance = null;
@@ -864,6 +943,7 @@
         let chartTopMap = null;
         let chartFunctionRequests = null;
         let chartFunctionCpu = null;
+        let securityInterceptRequestId = 0;
 
         const provinceMap = {
             '22': '北京', '86': '内蒙古', '146': '山西', '1069': '河北', '1177': '天津',
@@ -1233,6 +1313,163 @@
             }
         }
 
+        function clearSecurityInterceptCharts() {
+            [chartSecurityInterceptIp, chartSecurityInterceptRegion, chartSecurityInterceptPath].forEach(chart => {
+                if (chart) chart.clear();
+            });
+        }
+
+        function setSecurityInterceptState(state, message) {
+            const emptyEl = document.getElementById('security-intercept-empty');
+            const contentEl = document.getElementById('security-intercept-content');
+            const messageEl = document.getElementById('security-intercept-message');
+
+            if (!emptyEl || !contentEl || !messageEl) return;
+
+            const isData = state === 'data';
+            emptyEl.classList.toggle('hidden', isData);
+            contentEl.classList.toggle('hidden', !isData);
+            messageEl.innerText = message || '';
+            messageEl.className = state === 'error' ? 'text-red-500' : 'text-slate-500';
+
+            if (!isData) clearSecurityInterceptCharts();
+        }
+
+        function normalizeSecurityInterceptItems(items) {
+            if (!Array.isArray(items)) return [];
+            return items
+                .map(item => ({
+                    key: String(item?.key ?? item?.Key ?? '').trim(),
+                    value: Number(item?.value ?? item?.Value ?? 0)
+                }))
+                .filter(item => item.key && Number.isFinite(item.value) && item.value > 0)
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 10);
+        }
+
+        function truncateSecurityInterceptLabel(value, maxLength = 34) {
+            const text = String(value ?? '');
+            return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+        }
+
+        function renderSecurityInterceptBarChart(chart, items, color, formatter) {
+            if (!chart) return;
+
+            const sortedItems = normalizeSecurityInterceptItems(items);
+            if (sortedItems.length === 0) {
+                chart.clear();
+                chart.setOption({
+                    title: {
+                        text: '暂无数据',
+                        left: 'center',
+                        top: 'center',
+                        textStyle: { color: '#94a3b8', fontSize: 14, fontWeight: 'normal' }
+                    }
+                });
+                return;
+            }
+
+            const displayItems = sortedItems.slice().reverse();
+            const yAxisData = displayItems.map(item => formatter(item.key));
+            const seriesData = displayItems.map(item => item.value);
+            const reduceMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+            chart.setOption({
+                animation: !reduceMotion,
+                animationDuration: 180,
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: params => {
+                        const param = params[0];
+                        const item = displayItems[param.dataIndex];
+                        return `${item.key}<br/>${param.marker}拦截次数: ${item.value.toLocaleString()} 次`;
+                    }
+                },
+                grid: { left: '4%', right: '10%', bottom: '3%', top: '3%', containLabel: true },
+                xAxis: { type: 'value', name: '次' },
+                yAxis: { type: 'category', data: yAxisData, axisLabel: { interval: 0 } },
+                series: [{
+                    name: '拦截次数',
+                    type: 'bar',
+                    data: seriesData,
+                    itemStyle: { color },
+                    label: { show: true, position: 'right', formatter: ({ value }) => Number(value).toLocaleString() }
+                }]
+            }, true);
+        }
+
+        function renderSecurityInterceptData(data, domain) {
+            const ipTop = normalizeSecurityInterceptItems(data?.ipTop);
+            const regionSource = data?.countryTop?.length ? data.countryTop : data?.provinceTop;
+            const regionTop = normalizeSecurityInterceptItems(regionSource);
+            const pathTop = normalizeSecurityInterceptItems(data?.pathTop);
+            const total = Number(data?.total || 0);
+
+            if (total <= 0 && ipTop.length === 0 && regionTop.length === 0 && pathTop.length === 0) {
+                document.getElementById('security-intercept-scope').innerText = domain;
+                setSecurityInterceptState('empty', '当前域名和时间范围内没有拦截或挑战请求。');
+                return;
+            }
+
+            document.getElementById('security-intercept-scope').innerText = `${domain} · 防护处置请求`;
+            setSecurityInterceptState('data');
+
+            const topIp = ipTop[0];
+            const topPath = pathTop[0];
+            document.getElementById('security_intercept_total').innerText = formatCount(total);
+            document.getElementById('security_intercept_top_ip').innerText = topIp?.key || '-';
+            document.getElementById('security_intercept_top_ip_count').innerText = topIp ? `${topIp.value.toLocaleString()} 次` : '暂无数据';
+            document.getElementById('security_intercept_top_path').innerText = topPath ? truncateSecurityInterceptLabel(topPath.key, 42) : '-';
+            document.getElementById('security_intercept_top_path_count').innerText = topPath ? `${topPath.value.toLocaleString()} 次` : '暂无数据';
+
+            renderSecurityInterceptBarChart(chartSecurityInterceptIp, ipTop, '#ef4444', value => truncateSecurityInterceptLabel(value, 28));
+            renderSecurityInterceptBarChart(chartSecurityInterceptRegion, regionTop, '#f59e0b', value => {
+                return countryMap[value] || provinceMap[value] || value;
+            });
+            renderSecurityInterceptBarChart(chartSecurityInterceptPath, pathTop, '#10b981', value => truncateSecurityInterceptLabel(value, 58));
+
+            requestAnimationFrame(() => {
+                chartSecurityInterceptIp?.resize();
+                chartSecurityInterceptRegion?.resize();
+                chartSecurityInterceptPath?.resize();
+            });
+        }
+
+        async function fetchSecurityInterceptData(startTime, endTime) {
+            const zoneId = document.getElementById('zoneId')?.value.trim() || '*';
+            const domain = document.getElementById('domainSelect')?.value.trim() || '*';
+            const scopeEl = document.getElementById('security-intercept-scope');
+            const requestId = ++securityInterceptRequestId;
+
+            if (zoneId === '*' || domain === '*') {
+                if (scopeEl) scopeEl.innerText = '请选择具体域名';
+                setSecurityInterceptState('prompt', '请选择具体域名查看拦截 IP、地区、请求路径和次数。');
+                return true;
+            }
+
+            if (scopeEl) scopeEl.innerText = `${domain} · 加载中...`;
+            setSecurityInterceptState('loading', '正在加载域名拦截数据...');
+
+            try {
+                const url = `/api/security-intercepts?zoneId=${encodeURIComponent(zoneId)}&domain=${encodeURIComponent(domain)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!response.ok || result.error) throw new Error(result.error || '拦截数据加载失败');
+                if (requestId !== securityInterceptRequestId) return true;
+
+                renderSecurityInterceptData(result, domain);
+                return true;
+            } catch (err) {
+                console.error('Error fetching security intercept data:', err);
+                if (requestId === securityInterceptRequestId) {
+                    if (scopeEl) scopeEl.innerText = `${domain} · 加载失败`;
+                    setSecurityInterceptState('error', err.message || '拦截数据加载失败，请稍后重试。');
+                }
+                return false;
+            }
+        }
+
         function processData(result, targetMetric) {
             // Check for Top Data Structure (DescribeTopL7AnalysisData)
             // It returns Data[0].DetailData (Array of Key/Value)
@@ -1465,6 +1702,9 @@
         async function initDashboard() {
             // Initialize charts
             chartTraffic = echarts.init(document.getElementById('chart_traffic'));
+            chartSecurityInterceptIp = echarts.init(document.getElementById('chart_security_intercept_ip'));
+            chartSecurityInterceptRegion = echarts.init(document.getElementById('chart_security_intercept_region'));
+            chartSecurityInterceptPath = echarts.init(document.getElementById('chart_security_intercept_path'));
             chartBandwidth = echarts.init(document.getElementById('chart_bandwidth'));
             chartRequests = echarts.init(document.getElementById('chart_requests'));
             chartPerformance = echarts.init(document.getElementById('chart_performance'));
@@ -1694,7 +1934,7 @@
             const results = {};
             
             // Progress Bar Logic
-            let totalTasks = 3 + allMetrics.length * 2;
+            let totalTasks = 4 + allMetrics.length * 2;
             let completedTasks = 0;
             let hasError = false;
 
@@ -1728,6 +1968,8 @@
             fetchPagesCloudFunctionStats(startTime, endTime).then((res) => updateProgress(res));
             // Start Pages Cloud Function Monthly Stats fetch (independent)
             fetchPagesCloudFunctionMonthlyStats().then((res) => updateProgress(res));
+            // Start domain security intercept analysis fetch (independent)
+            fetchSecurityInterceptData(startTime, endTime).then((res) => updateProgress(res));
 
             // Parallel fetch
             // calculateTimeRange called above (line 1606), reusing startTime/endTime variables
@@ -3563,6 +3805,9 @@
         // Handle Resize
         window.addEventListener('resize', () => {
             chartTraffic && chartTraffic.resize();
+            chartSecurityInterceptIp && chartSecurityInterceptIp.resize();
+            chartSecurityInterceptRegion && chartSecurityInterceptRegion.resize();
+            chartSecurityInterceptPath && chartSecurityInterceptPath.resize();
             chartBandwidth && chartBandwidth.resize();
             chartRequests && chartRequests.resize();
             chartPerformance && chartPerformance.resize();
