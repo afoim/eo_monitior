@@ -293,11 +293,14 @@
                             </div>
                         </div>
                         <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
-                            <div class="flex flex-col space-y-1.5 p-6">
-                                <h3 class="font-semibold leading-none tracking-tight">来源地区 Top 10</h3>
+                            <div class="flex flex-wrap items-center justify-between gap-3 p-6">
+                                <h3 id="security-intercept-region-title" class="font-semibold leading-none tracking-tight">来源地区 Top 10</h3>
+                                <button id="security-intercept-region-back" type="button" aria-controls="chart_security_intercept_region" onclick="showSecurityCountryRegions()" class="hidden h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2">
+                                    ← 返回国家/地区
+                                </button>
                             </div>
                             <div class="p-6 pt-0">
-                                <div id="chart_security_intercept_region" class="w-full h-[320px]"></div>
+                                <div id="chart_security_intercept_region" class="w-full h-[320px]" role="img" aria-label="防护处置请求来源地区排行"></div>
                             </div>
                         </div>
                     </div>
@@ -944,6 +947,9 @@
         let chartFunctionRequests = null;
         let chartFunctionCpu = null;
         let securityInterceptRequestId = 0;
+        let securityInterceptCountryTop = [];
+        let securityInterceptProvinceTop = [];
+        let securityInterceptRegionView = 'country';
 
         const provinceMap = {
             '22': '北京', '86': '内蒙古', '146': '山西', '1069': '河北', '1177': '天津',
@@ -1352,11 +1358,13 @@
             return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
         }
 
-        function renderSecurityInterceptBarChart(chart, items, color, formatter) {
+        function renderSecurityInterceptBarChart(chart, items, color, formatter, options = {}) {
             if (!chart) return;
 
+            const { tooltipFormatter = value => value, tooltipHint, onClick } = options;
             const sortedItems = normalizeSecurityInterceptItems(items);
             if (sortedItems.length === 0) {
+                chart.off('click');
                 chart.clear();
                 chart.setOption({
                     title: {
@@ -1383,7 +1391,8 @@
                     formatter: params => {
                         const param = params[0];
                         const item = displayItems[param.dataIndex];
-                        return `${item.key}<br/>${param.marker}拦截次数: ${item.value.toLocaleString()} 次`;
+                        const hint = tooltipHint ? tooltipHint(item) : '';
+                        return `${tooltipFormatter(item.key)}<br/>${param.marker}拦截次数: ${item.value.toLocaleString()} 次${hint}`;
                     }
                 },
                 grid: { left: '4%', right: '10%', bottom: '3%', top: '3%', containLabel: true },
@@ -1397,16 +1406,89 @@
                     label: { show: true, position: 'right', formatter: ({ value }) => Number(value).toLocaleString() }
                 }]
             }, true);
+
+            chart.off('click');
+            if (onClick) {
+                chart.on('click', params => {
+                    const item = displayItems[params.dataIndex];
+                    if (item) onClick(item);
+                });
+            }
+        }
+
+        function isChinaRegionKey(value) {
+            return ['CN', 'China', '中国', '中国大陆'].includes(String(value));
+        }
+
+        function renderSecurityInterceptRegionChart() {
+            const titleEl = document.getElementById('security-intercept-region-title');
+            const backEl = document.getElementById('security-intercept-region-back');
+            const chartEl = document.getElementById('chart_security_intercept_region');
+            const isProvinceView = securityInterceptRegionView === 'province';
+
+            if (titleEl) {
+                titleEl.innerText = isProvinceView ? '中国大陆省份 Top 10' : '来源地区 Top 10';
+            }
+            if (backEl) {
+                const showBack = isProvinceView && securityInterceptCountryTop.length > 0;
+                backEl.classList.toggle('hidden', !showBack);
+                backEl.classList.toggle('inline-flex', showBack);
+            }
+            if (chartEl) {
+                chartEl.setAttribute('aria-label', isProvinceView ? '中国大陆防护处置请求省份排行' : '防护处置请求来源国家和地区排行');
+            }
+
+            if (isProvinceView) {
+                renderSecurityInterceptBarChart(
+                    chartSecurityInterceptRegion,
+                    securityInterceptProvinceTop,
+                    '#f59e0b',
+                    value => provinceMap[value] || value,
+                    { tooltipFormatter: value => provinceMap[value] || value }
+                );
+                return;
+            }
+
+            renderSecurityInterceptBarChart(
+                chartSecurityInterceptRegion,
+                securityInterceptCountryTop,
+                '#f59e0b',
+                value => countryMap[value] || value,
+                {
+                    tooltipFormatter: value => countryMap[value] || value,
+                    tooltipHint: item => {
+                        if (!isChinaRegionKey(item.key)) return '';
+                        return securityInterceptProvinceTop.length > 0
+                            ? '<br/><span style="color:#64748b">点击查看省份</span>'
+                            : '<br/><span style="color:#64748b">当前范围暂无省份明细</span>';
+                    },
+                    onClick: item => {
+                        if (isChinaRegionKey(item.key) && securityInterceptProvinceTop.length > 0) {
+                            showSecurityProvinceRegions();
+                        }
+                    }
+                }
+            );
+        }
+
+        function showSecurityProvinceRegions() {
+            securityInterceptRegionView = 'province';
+            renderSecurityInterceptRegionChart();
+        }
+
+        function showSecurityCountryRegions() {
+            securityInterceptRegionView = 'country';
+            renderSecurityInterceptRegionChart();
         }
 
         function renderSecurityInterceptData(data, domain) {
             const ipTop = normalizeSecurityInterceptItems(data?.ipTop);
-            const regionSource = data?.countryTop?.length ? data.countryTop : data?.provinceTop;
-            const regionTop = normalizeSecurityInterceptItems(regionSource);
+            const countryTop = normalizeSecurityInterceptItems(data?.countryTop);
+            const provinceTop = normalizeSecurityInterceptItems(data?.provinceTop);
             const pathTop = normalizeSecurityInterceptItems(data?.pathTop);
             const total = Number(data?.total || 0);
 
-            if (total <= 0 && ipTop.length === 0 && regionTop.length === 0 && pathTop.length === 0) {
+            if (total <= 0 && ipTop.length === 0 && countryTop.length === 0 && provinceTop.length === 0 && pathTop.length === 0) {
                 document.getElementById('security-intercept-scope').innerText = domain;
                 setSecurityInterceptState('empty', '当前域名和时间范围内没有拦截或挑战请求。');
                 return;
@@ -1423,10 +1505,12 @@
             document.getElementById('security_intercept_top_path').innerText = topPath ? truncateSecurityInterceptLabel(topPath.key, 42) : '-';
             document.getElementById('security_intercept_top_path_count').innerText = topPath ? `${topPath.value.toLocaleString()} 次` : '暂无数据';
 
+            securityInterceptCountryTop = countryTop;
+            securityInterceptProvinceTop = provinceTop;
+            securityInterceptRegionView = countryTop.length > 0 ? 'country' : 'province';
+
             renderSecurityInterceptBarChart(chartSecurityInterceptIp, ipTop, '#ef4444', value => truncateSecurityInterceptLabel(value, 28));
-            renderSecurityInterceptBarChart(chartSecurityInterceptRegion, regionTop, '#f59e0b', value => {
-                return countryMap[value] || provinceMap[value] || value;
-            });
+            renderSecurityInterceptRegionChart();
             renderSecurityInterceptBarChart(chartSecurityInterceptPath, pathTop, '#10b981', value => truncateSecurityInterceptLabel(value, 58));
 
             requestAnimationFrame(() => {
