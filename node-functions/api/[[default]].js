@@ -722,15 +722,21 @@ app.get('/traffic', async (req, res) => {
     }
 });
 
-// 获取指定域名被 Web 防护拦截的来源 IP、地区、请求路径排行。
+// 获取指定域名（可按国家过滤）被 Web 防护拦截的来源 IP、地区、请求路径排行。
 app.get('/security-intercepts', async (req, res) => {
     const zoneId = typeof req.query.zoneId === 'string' ? req.query.zoneId.trim() : '';
     const domain = typeof req.query.domain === 'string' ? req.query.domain.trim() : '';
     const startTime = typeof req.query.startTime === 'string' ? req.query.startTime.trim() : '';
     const endTime = typeof req.query.endTime === 'string' ? req.query.endTime.trim() : '';
+    const rawCountry = req.query.country;
+    const country = typeof rawCountry === 'string' ? rawCountry.trim().toUpperCase() : '';
 
     if (!zoneId || zoneId === '*' || !domain || domain === '*') {
         return res.status(400).json({ error: "zoneId and domain are required and cannot be '*'" });
+    }
+
+    if (rawCountry !== undefined && (typeof rawCountry !== 'string' || !/^[A-Z]{2}$/.test(country))) {
+        return res.status(400).json({ error: 'country must be a valid ISO 3166-1 alpha-2 code' });
     }
 
     const startTimestamp = parseIsoDateTime(startTime);
@@ -761,10 +767,16 @@ app.get('/security-intercepts', async (req, res) => {
             profile: { httpProfile: { endpoint: 'teo.tencentcloudapi.com' } }
         });
 
-        const createFilters = () => [
-            { Key: 'domain', Operator: 'equals', Value: [domain] },
-            { Key: 'mitigatedByWebSecurity', Operator: 'equals', Value: ['yes'] }
-        ];
+        const createFilters = () => {
+            const filters = [
+                { Key: 'domain', Operator: 'equals', Value: [domain] },
+                { Key: 'mitigatedByWebSecurity', Operator: 'equals', Value: ['yes'] }
+            ];
+            if (country) {
+                filters.push({ Key: 'country', Operator: 'equals', Value: [country] });
+            }
+            return filters;
+        };
         const createBaseParams = () => ({
             StartTime: startTime,
             EndTime: endTime,

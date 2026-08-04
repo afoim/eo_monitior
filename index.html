@@ -286,7 +286,7 @@
                     <div class="grid gap-4 lg:grid-cols-2">
                         <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
                             <div class="flex flex-col space-y-1.5 p-6">
-                                <h3 class="font-semibold leading-none tracking-tight">被拦截 IP Top 10</h3>
+                                <h3 id="security-intercept-ip-title" class="font-semibold leading-none tracking-tight">被拦截 IP Top 10</h3>
                             </div>
                             <div class="p-6 pt-0">
                                 <div id="chart_security_intercept_ip" class="w-full h-[320px]"></div>
@@ -307,7 +307,7 @@
 
                     <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
                         <div class="flex flex-col space-y-1.5 p-6">
-                            <h3 class="font-semibold leading-none tracking-tight">被拦截请求路径 Top 10</h3>
+                            <h3 id="security-intercept-path-title" class="font-semibold leading-none tracking-tight">被拦截请求路径 Top 10</h3>
                         </div>
                         <div class="p-6 pt-0">
                             <div id="chart_security_intercept_path" class="w-full h-[350px]"></div>
@@ -950,6 +950,10 @@
         let securityInterceptCountryTop = [];
         let securityInterceptProvinceTop = [];
         let securityInterceptRegionView = 'country';
+        let securityInterceptGlobalData = null;
+        let securityInterceptChinaData = null;
+        let securityInterceptQueryContext = null;
+        let securityInterceptDrilldownLoading = false;
 
         const provinceMap = {
             '22': '北京', '86': '内蒙古', '146': '山西', '1069': '河北', '1177': '天津',
@@ -1420,6 +1424,49 @@
             return ['CN', 'China', '中国', '中国大陆'].includes(String(value));
         }
 
+        function updateSecurityInterceptScopeTitles(isChinaScope) {
+            const ipTitleEl = document.getElementById('security-intercept-ip-title');
+            const pathTitleEl = document.getElementById('security-intercept-path-title');
+            if (ipTitleEl) {
+                ipTitleEl.innerText = isChinaScope ? '中国大陆拦截 IP Top 10' : '被拦截 IP Top 10';
+            }
+            if (pathTitleEl) {
+                pathTitleEl.innerText = isChinaScope ? '中国大陆拦截请求路径 Top 10' : '被拦截请求路径 Top 10';
+            }
+        }
+
+        function setSecurityInterceptDrilldownLoading(isLoading, domain = '') {
+            securityInterceptDrilldownLoading = isLoading;
+            const backEl = document.getElementById('security-intercept-region-back');
+            if (backEl) backEl.setAttribute('aria-busy', String(isLoading));
+
+            [chartSecurityInterceptIp, chartSecurityInterceptRegion, chartSecurityInterceptPath].forEach(chart => {
+                if (!chart) return;
+                if (isLoading) {
+                    chart.showLoading('default', {
+                        text: '正在加载中国大陆数据...',
+                        showSpinner: false,
+                        color: '#f59e0b',
+                        textColor: '#475569',
+                        maskColor: 'rgba(255, 255, 255, 0.88)'
+                    });
+                } else {
+                    chart.hideLoading();
+                }
+            });
+
+            if (!isLoading) return;
+
+            updateSecurityInterceptScopeTitles(true);
+            const scopeEl = document.getElementById('security-intercept-scope');
+            if (scopeEl) scopeEl.innerText = `${domain} · 正在加载中国大陆数据...`;
+            document.getElementById('security_intercept_total').innerText = '加载中...';
+            document.getElementById('security_intercept_top_ip').innerText = '加载中...';
+            document.getElementById('security_intercept_top_ip_count').innerText = '中国大陆范围';
+            document.getElementById('security_intercept_top_path').innerText = '加载中...';
+            document.getElementById('security_intercept_top_path_count').innerText = '中国大陆范围';
+        }
+
         function renderSecurityInterceptRegionChart() {
             const titleEl = document.getElementById('security-intercept-region-title');
             const backEl = document.getElementById('security-intercept-region-back');
@@ -1430,7 +1477,7 @@
                 titleEl.innerText = isProvinceView ? '中国大陆省份 Top 10' : '来源地区 Top 10';
             }
             if (backEl) {
-                const showBack = isProvinceView && securityInterceptCountryTop.length > 0;
+                const showBack = isProvinceView && Boolean(securityInterceptGlobalData);
                 backEl.classList.toggle('hidden', !showBack);
                 backEl.classList.toggle('inline-flex', showBack);
             }
@@ -1458,12 +1505,10 @@
                     tooltipFormatter: value => countryMap[value] || value,
                     tooltipHint: item => {
                         if (!isChinaRegionKey(item.key)) return '';
-                        return securityInterceptProvinceTop.length > 0
-                            ? '<br/><span style="color:#64748b">点击查看省份</span>'
-                            : '<br/><span style="color:#64748b">当前范围暂无省份明细</span>';
+                        return '<br/><span style="color:#64748b">点击查看中国大陆 IP、路径和省份</span>';
                     },
                     onClick: item => {
-                        if (isChinaRegionKey(item.key) && securityInterceptProvinceTop.length > 0) {
+                        if (isChinaRegionKey(item.key)) {
                             showSecurityProvinceRegions();
                         }
                     }
@@ -1471,31 +1516,71 @@
             );
         }
 
-        function showSecurityProvinceRegions() {
+        async function showSecurityProvinceRegions() {
+            if (securityInterceptDrilldownLoading || !securityInterceptQueryContext) return;
+
+            if (securityInterceptChinaData) {
+                renderSecurityInterceptData(securityInterceptChinaData, securityInterceptQueryContext.domain, { country: 'CN' });
+                return;
+            }
+
+            const requestId = ++securityInterceptRequestId;
             securityInterceptRegionView = 'province';
             renderSecurityInterceptRegionChart();
+            setSecurityInterceptDrilldownLoading(true, securityInterceptQueryContext.domain);
+
+            try {
+                const result = await fetchSecurityInterceptScopeData(securityInterceptQueryContext, 'CN');
+                if (requestId !== securityInterceptRequestId) return;
+
+                securityInterceptChinaData = result;
+                renderSecurityInterceptData(result, securityInterceptQueryContext.domain, { country: 'CN' });
+            } catch (err) {
+                console.error('Error fetching China security intercept data:', err);
+                if (requestId !== securityInterceptRequestId) return;
+
+                if (securityInterceptGlobalData) {
+                    renderSecurityInterceptData(securityInterceptGlobalData, securityInterceptQueryContext.domain);
+                    const scopeEl = document.getElementById('security-intercept-scope');
+                    if (scopeEl) scopeEl.innerText = `${securityInterceptQueryContext.domain} · 中国大陆数据加载失败，已恢复全部地区`;
+                } else {
+                    setSecurityInterceptState('error', err.message || '中国大陆拦截数据加载失败，请稍后重试。');
+                }
+            } finally {
+                if (requestId === securityInterceptRequestId) {
+                    setSecurityInterceptDrilldownLoading(false);
+                }
+            }
         }
 
         function showSecurityCountryRegions() {
-            securityInterceptRegionView = 'country';
-            renderSecurityInterceptRegionChart();
+            ++securityInterceptRequestId;
+            setSecurityInterceptDrilldownLoading(false);
+            if (securityInterceptGlobalData && securityInterceptQueryContext) {
+                renderSecurityInterceptData(securityInterceptGlobalData, securityInterceptQueryContext.domain);
+            }
         }
 
-        function renderSecurityInterceptData(data, domain) {
+        function renderSecurityInterceptData(data, domain, options = {}) {
+            const isChinaScope = options.country === 'CN';
             const ipTop = normalizeSecurityInterceptItems(data?.ipTop);
             const countryTop = normalizeSecurityInterceptItems(data?.countryTop);
             const provinceTop = normalizeSecurityInterceptItems(data?.provinceTop);
             const pathTop = normalizeSecurityInterceptItems(data?.pathTop);
             const total = Number(data?.total || 0);
 
-            if (total <= 0 && ipTop.length === 0 && countryTop.length === 0 && provinceTop.length === 0 && pathTop.length === 0) {
+            if (!isChinaScope && total <= 0 && ipTop.length === 0 && countryTop.length === 0 && provinceTop.length === 0 && pathTop.length === 0) {
                 document.getElementById('security-intercept-scope').innerText = domain;
                 setSecurityInterceptState('empty', '当前域名和时间范围内没有拦截或挑战请求。');
                 return;
             }
 
-            document.getElementById('security-intercept-scope').innerText = `${domain} · 防护处置请求`;
+            document.getElementById('security-intercept-scope').innerText = isChinaScope
+                ? `${domain} · 中国大陆防护处置请求`
+                : `${domain} · 防护处置请求`;
             setSecurityInterceptState('data');
+            setSecurityInterceptDrilldownLoading(false);
+            updateSecurityInterceptScopeTitles(isChinaScope);
 
             const topIp = ipTop[0];
             const topPath = pathTop[0];
@@ -1507,7 +1592,7 @@
 
             securityInterceptCountryTop = countryTop;
             securityInterceptProvinceTop = provinceTop;
-            securityInterceptRegionView = countryTop.length > 0 ? 'country' : 'province';
+            securityInterceptRegionView = isChinaScope ? 'province' : (countryTop.length > 0 ? 'country' : 'province');
 
             renderSecurityInterceptBarChart(chartSecurityInterceptIp, ipTop, '#ef4444', value => truncateSecurityInterceptLabel(value, 28));
             renderSecurityInterceptRegionChart();
@@ -1520,11 +1605,31 @@
             });
         }
 
+        async function fetchSecurityInterceptScopeData(context, country = '') {
+            const params = new URLSearchParams({
+                zoneId: context.zoneId,
+                domain: context.domain,
+                startTime: context.startTime,
+                endTime: context.endTime
+            });
+            if (country) params.set('country', country);
+
+            const response = await fetch(`/api/security-intercepts?${params.toString()}`);
+            const result = await response.json();
+            if (!response.ok || result.error) throw new Error(result.error || '拦截数据加载失败');
+            return result;
+        }
+
         async function fetchSecurityInterceptData(startTime, endTime) {
             const zoneId = document.getElementById('zoneId')?.value.trim() || '*';
             const domain = document.getElementById('domainSelect')?.value.trim() || '*';
             const scopeEl = document.getElementById('security-intercept-scope');
             const requestId = ++securityInterceptRequestId;
+
+            securityInterceptGlobalData = null;
+            securityInterceptChinaData = null;
+            securityInterceptQueryContext = null;
+            setSecurityInterceptDrilldownLoading(false);
 
             if (zoneId === '*' || domain === '*') {
                 if (scopeEl) scopeEl.innerText = '请选择具体域名';
@@ -1534,14 +1639,13 @@
 
             if (scopeEl) scopeEl.innerText = `${domain} · 加载中...`;
             setSecurityInterceptState('loading', '正在加载域名拦截数据...');
+            securityInterceptQueryContext = { zoneId, domain, startTime, endTime };
 
             try {
-                const url = `/api/security-intercepts?zoneId=${encodeURIComponent(zoneId)}&domain=${encodeURIComponent(domain)}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}`;
-                const response = await fetch(url);
-                const result = await response.json();
-                if (!response.ok || result.error) throw new Error(result.error || '拦截数据加载失败');
+                const result = await fetchSecurityInterceptScopeData(securityInterceptQueryContext);
                 if (requestId !== securityInterceptRequestId) return true;
 
+                securityInterceptGlobalData = result;
                 renderSecurityInterceptData(result, domain);
                 return true;
             } catch (err) {
