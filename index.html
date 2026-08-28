@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" href="https://q2.qlogo.cn/headimg_dl?dst_uin=2726730791&spec=0">
+    <link rel="icon" href="https://blog.ccya.top/logo.svg">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AcoFork 的 EdgeOne 监控大屏</title>
+    <title>茶茶吖 的 EdgeOne 监控大屏</title>
     <!-- Tailwind CSS for Shadcn/UI style -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
@@ -116,7 +116,7 @@
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 id="page-header" class="text-3xl font-bold tracking-tight text-slate-900">AcoFork 的 EdgeOne 监控大屏</h1>
+                <h1 id="page-header" class="text-3xl font-bold tracking-tight text-slate-900">茶茶吖 的 EdgeOne 监控大屏</h1>
                 <p class="text-muted-foreground mt-1">EdgeOne 站点流量与请求量分析</p>
             </div>
         </div>
@@ -171,8 +171,14 @@
             </div>
             <div class="flex items-center space-x-2">
                 <label for="zoneId" class="text-sm font-medium">选择站点:</label>
-                <select id="zoneId" onchange="refreshData()" class="h-9 w-[240px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900">
+                <select id="zoneId" onchange="handleZoneChange()" class="h-9 w-[240px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-900">
                      <option value="*">加载中...</option>
+                </select>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label for="domainSelect" class="text-sm font-medium">选择域名:</label>
+                <select id="domainSelect" onchange="refreshData()" class="h-9 w-[240px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm disabled:opacity-50" disabled>
+                    <option value="*">全部域名</option>
                 </select>
             </div>
             <!-- <button onclick="refreshData()" class="h-9 px-4 py-2 bg-slate-900 text-white hover:bg-slate-900/90 inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 shadow">
@@ -229,6 +235,85 @@
                     <div class="p-6 pt-0">
                         <div id="chart_traffic" class="w-full h-[350px]"></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Section 1.5: Domain Intercept Analysis (域名拦截分析) -->
+            <div id="security-intercept-section" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V7l7-4z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.5 12l1.7 1.7 3.6-3.6"></path></svg>
+                        域名拦截分析 (Domain Protection)
+                    </h2>
+                    <span id="security-intercept-scope" class="text-xs text-muted-foreground" aria-live="polite">请选择具体域名</span>
+                </div>
+
+                <div id="security-intercept-empty" class="rounded-xl border bg-white p-6 text-sm text-slate-500" aria-live="polite">
+                    <p id="security-intercept-message">请选择具体域名查看拦截 IP、地区、请求路径和次数。</p>
+                </div>
+
+                <div id="security-intercept-content" class="hidden space-y-4">
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                                <h3 class="tracking-tight text-sm font-medium text-muted-foreground">防护处置请求</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div class="text-2xl font-bold" id="security_intercept_total">-</div>
+                                <p class="text-xs text-muted-foreground mt-1">包含拦截与挑战请求</p>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                                <h3 class="tracking-tight text-sm font-medium text-muted-foreground">最高频来源 IP</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div class="text-xl font-bold break-all" id="security_intercept_top_ip">-</div>
+                                <p class="text-xs text-muted-foreground mt-1" id="security_intercept_top_ip_count">-</p>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="p-6 flex flex-row items-center justify-between space-y-0 pb-2">
+                                <h3 class="tracking-tight text-sm font-medium text-muted-foreground">最高频请求路径</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div class="text-xl font-bold break-all" id="security_intercept_top_path">-</div>
+                                <p class="text-xs text-muted-foreground mt-1" id="security_intercept_top_path_count">-</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="flex flex-col space-y-1.5 p-6">
+                                <h3 id="security-intercept-ip-title" class="font-semibold leading-none tracking-tight">被拦截 IP Top 10</h3>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div id="chart_security_intercept_ip" class="w-full h-[320px]"></div>
+                            </div>
+                        </div>
+                        <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                            <div class="flex flex-wrap items-center justify-between gap-3 p-6">
+                                <h3 id="security-intercept-region-title" class="font-semibold leading-none tracking-tight">来源地区 Top 10</h3>
+                                <button id="security-intercept-region-back" type="button" aria-controls="chart_security_intercept_region" onclick="showSecurityCountryRegions()" class="hidden h-8 items-center rounded-md border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2">
+                                    ← 返回国家/地区
+                                </button>
+                            </div>
+                            <div class="p-6 pt-0">
+                                <div id="chart_security_intercept_region" class="w-full h-[320px]" role="img" aria-label="防护处置请求来源地区排行"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border bg-card text-card-foreground shadow-sm">
+                        <div class="flex flex-col space-y-1.5 p-6">
+                            <h3 id="security-intercept-path-title" class="font-semibold leading-none tracking-tight">被拦截请求路径 Top 10</h3>
+                        </div>
+                        <div class="p-6 pt-0">
+                            <div id="chart_security_intercept_path" class="w-full h-[350px]"></div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-muted-foreground">统计口径：EdgeOne Web 防护处置请求，数据通常有约 10 分钟延迟。</p>
                 </div>
             </div>
 
@@ -826,6 +911,9 @@
     <script>
         // ECharts instance variables
         let chartTraffic = null;
+        let chartSecurityInterceptIp = null;
+        let chartSecurityInterceptRegion = null;
+        let chartSecurityInterceptPath = null;
         let chartBandwidth = null;
         let chartRequests = null;
         let chartPerformance = null;
@@ -858,6 +946,14 @@
         let chartTopMap = null;
         let chartFunctionRequests = null;
         let chartFunctionCpu = null;
+        let securityInterceptRequestId = 0;
+        let securityInterceptCountryTop = [];
+        let securityInterceptProvinceTop = [];
+        let securityInterceptRegionView = 'country';
+        let securityInterceptGlobalData = null;
+        let securityInterceptChinaData = null;
+        let securityInterceptQueryContext = null;
+        let securityInterceptDrilldownLoading = false;
 
         const provinceMap = {
             '22': '北京', '86': '内蒙古', '146': '山西', '1069': '河北', '1177': '天津',
@@ -1203,6 +1299,8 @@
 
                 const interval = document.getElementById('interval').value;
                 const zoneId = document.getElementById('zoneId').value.trim();
+                const domainSelect = document.getElementById('domainSelect');
+                const domain = domainSelect ? domainSelect.value.trim() : '*';
                 
                 let url = `/api/traffic?metric=${metric}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}`;
                 if (interval && interval !== 'auto') {
@@ -1210,6 +1308,9 @@
                 }
                 if (zoneId) {
                     url += `&zoneId=${encodeURIComponent(zoneId)}`;
+                }
+                if (zoneId && zoneId !== '*' && domain && domain !== '*') {
+                    url += `&domain=${encodeURIComponent(domain)}`;
                 }
 
                 const response = await fetch(url);
@@ -1219,6 +1320,341 @@
             } catch (err) {
                 console.error(`Error fetching ${metric}:`, err);
                 return null;
+            }
+        }
+
+        function clearSecurityInterceptCharts() {
+            [chartSecurityInterceptIp, chartSecurityInterceptRegion, chartSecurityInterceptPath].forEach(chart => {
+                if (chart) chart.clear();
+            });
+        }
+
+        function setSecurityInterceptState(state, message) {
+            const emptyEl = document.getElementById('security-intercept-empty');
+            const contentEl = document.getElementById('security-intercept-content');
+            const messageEl = document.getElementById('security-intercept-message');
+
+            if (!emptyEl || !contentEl || !messageEl) return;
+
+            const isData = state === 'data';
+            emptyEl.classList.toggle('hidden', isData);
+            contentEl.classList.toggle('hidden', !isData);
+            messageEl.innerText = message || '';
+            messageEl.className = state === 'error' ? 'text-red-500' : 'text-slate-500';
+
+            if (!isData) clearSecurityInterceptCharts();
+        }
+
+        function normalizeSecurityInterceptItems(items) {
+            if (!Array.isArray(items)) return [];
+            return items
+                .map(item => ({
+                    key: String(item?.key ?? item?.Key ?? '').trim(),
+                    value: Number(item?.value ?? item?.Value ?? 0)
+                }))
+                .filter(item => item.key && Number.isFinite(item.value) && item.value > 0)
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 10);
+        }
+
+        function truncateSecurityInterceptLabel(value, maxLength = 34) {
+            const text = String(value ?? '');
+            return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+        }
+
+        function renderSecurityInterceptBarChart(chart, items, color, formatter, options = {}) {
+            if (!chart) return;
+
+            const { tooltipFormatter = value => value, tooltipHint, onClick } = options;
+            const sortedItems = normalizeSecurityInterceptItems(items);
+            if (sortedItems.length === 0) {
+                chart.off('click');
+                chart.clear();
+                chart.setOption({
+                    title: {
+                        text: '暂无数据',
+                        left: 'center',
+                        top: 'center',
+                        textStyle: { color: '#94a3b8', fontSize: 14, fontWeight: 'normal' }
+                    }
+                });
+                return;
+            }
+
+            const displayItems = sortedItems.slice().reverse();
+            const yAxisData = displayItems.map(item => formatter(item.key));
+            const seriesData = displayItems.map(item => item.value);
+            const reduceMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+            chart.setOption({
+                animation: !reduceMotion,
+                animationDuration: 180,
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: params => {
+                        const param = params[0];
+                        const item = displayItems[param.dataIndex];
+                        const hint = tooltipHint ? tooltipHint(item) : '';
+                        return `${tooltipFormatter(item.key)}<br/>${param.marker}拦截次数: ${item.value.toLocaleString()} 次${hint}`;
+                    }
+                },
+                grid: { left: '4%', right: '10%', bottom: '3%', top: '3%', containLabel: true },
+                xAxis: { type: 'value', name: '次' },
+                yAxis: { type: 'category', data: yAxisData, axisLabel: { interval: 0 } },
+                series: [{
+                    name: '拦截次数',
+                    type: 'bar',
+                    data: seriesData,
+                    itemStyle: { color },
+                    label: { show: true, position: 'right', formatter: ({ value }) => Number(value).toLocaleString() }
+                }]
+            }, true);
+
+            chart.off('click');
+            if (onClick) {
+                chart.on('click', params => {
+                    const item = displayItems[params.dataIndex];
+                    if (item) onClick(item);
+                });
+            }
+        }
+
+        function isChinaRegionKey(value) {
+            return ['CN', 'China', '中国', '中国大陆'].includes(String(value));
+        }
+
+        function updateSecurityInterceptScopeTitles(isChinaScope) {
+            const ipTitleEl = document.getElementById('security-intercept-ip-title');
+            const pathTitleEl = document.getElementById('security-intercept-path-title');
+            if (ipTitleEl) {
+                ipTitleEl.innerText = isChinaScope ? '中国大陆拦截 IP Top 10' : '被拦截 IP Top 10';
+            }
+            if (pathTitleEl) {
+                pathTitleEl.innerText = isChinaScope ? '中国大陆拦截请求路径 Top 10' : '被拦截请求路径 Top 10';
+            }
+        }
+
+        function setSecurityInterceptDrilldownLoading(isLoading, domain = '') {
+            securityInterceptDrilldownLoading = isLoading;
+            const backEl = document.getElementById('security-intercept-region-back');
+            if (backEl) backEl.setAttribute('aria-busy', String(isLoading));
+
+            [chartSecurityInterceptIp, chartSecurityInterceptRegion, chartSecurityInterceptPath].forEach(chart => {
+                if (!chart) return;
+                if (isLoading) {
+                    chart.showLoading('default', {
+                        text: '正在加载中国大陆数据...',
+                        showSpinner: false,
+                        color: '#f59e0b',
+                        textColor: '#475569',
+                        maskColor: 'rgba(255, 255, 255, 0.88)'
+                    });
+                } else {
+                    chart.hideLoading();
+                }
+            });
+
+            if (!isLoading) return;
+
+            updateSecurityInterceptScopeTitles(true);
+            const scopeEl = document.getElementById('security-intercept-scope');
+            if (scopeEl) scopeEl.innerText = `${domain} · 正在加载中国大陆数据...`;
+            document.getElementById('security_intercept_total').innerText = '加载中...';
+            document.getElementById('security_intercept_top_ip').innerText = '加载中...';
+            document.getElementById('security_intercept_top_ip_count').innerText = '中国大陆范围';
+            document.getElementById('security_intercept_top_path').innerText = '加载中...';
+            document.getElementById('security_intercept_top_path_count').innerText = '中国大陆范围';
+        }
+
+        function renderSecurityInterceptRegionChart() {
+            const titleEl = document.getElementById('security-intercept-region-title');
+            const backEl = document.getElementById('security-intercept-region-back');
+            const chartEl = document.getElementById('chart_security_intercept_region');
+            const isProvinceView = securityInterceptRegionView === 'province';
+
+            if (titleEl) {
+                titleEl.innerText = isProvinceView ? '中国大陆省份 Top 10' : '来源地区 Top 10';
+            }
+            if (backEl) {
+                const showBack = isProvinceView && Boolean(securityInterceptGlobalData);
+                backEl.classList.toggle('hidden', !showBack);
+                backEl.classList.toggle('inline-flex', showBack);
+            }
+            if (chartEl) {
+                chartEl.setAttribute('aria-label', isProvinceView ? '中国大陆防护处置请求省份排行' : '防护处置请求来源国家和地区排行');
+            }
+
+            if (isProvinceView) {
+                renderSecurityInterceptBarChart(
+                    chartSecurityInterceptRegion,
+                    securityInterceptProvinceTop,
+                    '#f59e0b',
+                    value => provinceMap[value] || value,
+                    { tooltipFormatter: value => provinceMap[value] || value }
+                );
+                return;
+            }
+
+            renderSecurityInterceptBarChart(
+                chartSecurityInterceptRegion,
+                securityInterceptCountryTop,
+                '#f59e0b',
+                value => countryMap[value] || value,
+                {
+                    tooltipFormatter: value => countryMap[value] || value,
+                    tooltipHint: item => {
+                        if (!isChinaRegionKey(item.key)) return '';
+                        return '<br/><span style="color:#64748b">点击查看中国大陆 IP、路径和省份</span>';
+                    },
+                    onClick: item => {
+                        if (isChinaRegionKey(item.key)) {
+                            showSecurityProvinceRegions();
+                        }
+                    }
+                }
+            );
+        }
+
+        async function showSecurityProvinceRegions() {
+            if (securityInterceptDrilldownLoading || !securityInterceptQueryContext) return;
+
+            if (securityInterceptChinaData) {
+                renderSecurityInterceptData(securityInterceptChinaData, securityInterceptQueryContext.domain, { country: 'CN' });
+                return;
+            }
+
+            const requestId = ++securityInterceptRequestId;
+            securityInterceptRegionView = 'province';
+            renderSecurityInterceptRegionChart();
+            setSecurityInterceptDrilldownLoading(true, securityInterceptQueryContext.domain);
+
+            try {
+                const result = await fetchSecurityInterceptScopeData(securityInterceptQueryContext, 'CN');
+                if (requestId !== securityInterceptRequestId) return;
+
+                securityInterceptChinaData = result;
+                renderSecurityInterceptData(result, securityInterceptQueryContext.domain, { country: 'CN' });
+            } catch (err) {
+                console.error('Error fetching China security intercept data:', err);
+                if (requestId !== securityInterceptRequestId) return;
+
+                if (securityInterceptGlobalData) {
+                    renderSecurityInterceptData(securityInterceptGlobalData, securityInterceptQueryContext.domain);
+                    const scopeEl = document.getElementById('security-intercept-scope');
+                    if (scopeEl) scopeEl.innerText = `${securityInterceptQueryContext.domain} · 中国大陆数据加载失败，已恢复全部地区`;
+                } else {
+                    setSecurityInterceptState('error', err.message || '中国大陆拦截数据加载失败，请稍后重试。');
+                }
+            } finally {
+                if (requestId === securityInterceptRequestId) {
+                    setSecurityInterceptDrilldownLoading(false);
+                }
+            }
+        }
+
+        function showSecurityCountryRegions() {
+            ++securityInterceptRequestId;
+            setSecurityInterceptDrilldownLoading(false);
+            if (securityInterceptGlobalData && securityInterceptQueryContext) {
+                renderSecurityInterceptData(securityInterceptGlobalData, securityInterceptQueryContext.domain);
+            }
+        }
+
+        function renderSecurityInterceptData(data, domain, options = {}) {
+            const isChinaScope = options.country === 'CN';
+            const ipTop = normalizeSecurityInterceptItems(data?.ipTop);
+            const countryTop = normalizeSecurityInterceptItems(data?.countryTop);
+            const provinceTop = normalizeSecurityInterceptItems(data?.provinceTop);
+            const pathTop = normalizeSecurityInterceptItems(data?.pathTop);
+            const total = Number(data?.total || 0);
+
+            if (!isChinaScope && total <= 0 && ipTop.length === 0 && countryTop.length === 0 && provinceTop.length === 0 && pathTop.length === 0) {
+                document.getElementById('security-intercept-scope').innerText = domain;
+                setSecurityInterceptState('empty', '当前域名和时间范围内没有拦截或挑战请求。');
+                return;
+            }
+
+            document.getElementById('security-intercept-scope').innerText = isChinaScope
+                ? `${domain} · 中国大陆防护处置请求`
+                : `${domain} · 防护处置请求`;
+            setSecurityInterceptState('data');
+            setSecurityInterceptDrilldownLoading(false);
+            updateSecurityInterceptScopeTitles(isChinaScope);
+
+            const topIp = ipTop[0];
+            const topPath = pathTop[0];
+            document.getElementById('security_intercept_total').innerText = formatCount(total);
+            document.getElementById('security_intercept_top_ip').innerText = topIp?.key || '-';
+            document.getElementById('security_intercept_top_ip_count').innerText = topIp ? `${topIp.value.toLocaleString()} 次` : '暂无数据';
+            document.getElementById('security_intercept_top_path').innerText = topPath ? truncateSecurityInterceptLabel(topPath.key, 42) : '-';
+            document.getElementById('security_intercept_top_path_count').innerText = topPath ? `${topPath.value.toLocaleString()} 次` : '暂无数据';
+
+            securityInterceptCountryTop = countryTop;
+            securityInterceptProvinceTop = provinceTop;
+            securityInterceptRegionView = isChinaScope ? 'province' : (countryTop.length > 0 ? 'country' : 'province');
+
+            renderSecurityInterceptBarChart(chartSecurityInterceptIp, ipTop, '#ef4444', value => truncateSecurityInterceptLabel(value, 28));
+            renderSecurityInterceptRegionChart();
+            renderSecurityInterceptBarChart(chartSecurityInterceptPath, pathTop, '#10b981', value => truncateSecurityInterceptLabel(value, 58));
+
+            requestAnimationFrame(() => {
+                chartSecurityInterceptIp?.resize();
+                chartSecurityInterceptRegion?.resize();
+                chartSecurityInterceptPath?.resize();
+            });
+        }
+
+        async function fetchSecurityInterceptScopeData(context, country = '') {
+            const params = new URLSearchParams({
+                zoneId: context.zoneId,
+                domain: context.domain,
+                startTime: context.startTime,
+                endTime: context.endTime
+            });
+            if (country) params.set('country', country);
+
+            const response = await fetch(`/api/security-intercepts?${params.toString()}`);
+            const result = await response.json();
+            if (!response.ok || result.error) throw new Error(result.error || '拦截数据加载失败');
+            return result;
+        }
+
+        async function fetchSecurityInterceptData(startTime, endTime) {
+            const zoneId = document.getElementById('zoneId')?.value.trim() || '*';
+            const domain = document.getElementById('domainSelect')?.value.trim() || '*';
+            const scopeEl = document.getElementById('security-intercept-scope');
+            const requestId = ++securityInterceptRequestId;
+
+            securityInterceptGlobalData = null;
+            securityInterceptChinaData = null;
+            securityInterceptQueryContext = null;
+            setSecurityInterceptDrilldownLoading(false);
+
+            if (zoneId === '*' || domain === '*') {
+                if (scopeEl) scopeEl.innerText = '请选择具体域名';
+                setSecurityInterceptState('prompt', '请选择具体域名查看拦截 IP、地区、请求路径和次数。');
+                return true;
+            }
+
+            if (scopeEl) scopeEl.innerText = `${domain} · 加载中...`;
+            setSecurityInterceptState('loading', '正在加载域名拦截数据...');
+            securityInterceptQueryContext = { zoneId, domain, startTime, endTime };
+
+            try {
+                const result = await fetchSecurityInterceptScopeData(securityInterceptQueryContext);
+                if (requestId !== securityInterceptRequestId) return true;
+
+                securityInterceptGlobalData = result;
+                renderSecurityInterceptData(result, domain);
+                return true;
+            } catch (err) {
+                console.error('Error fetching security intercept data:', err);
+                if (requestId === securityInterceptRequestId) {
+                    if (scopeEl) scopeEl.innerText = `${domain} · 加载失败`;
+                    setSecurityInterceptState('error', err.message || '拦截数据加载失败，请稍后重试。');
+                }
+                return false;
             }
         }
 
@@ -1399,6 +1835,7 @@
                     select.value = "*";
                 }
 
+                await fetchDomains(select.value);
             } catch (err) {
                 console.error("Error fetching zones:", err);
                 const select = document.getElementById('zoneId');
@@ -1406,13 +1843,56 @@
                 if (select.options.length === 0 || select.options[0].value !== '*') {
                      select.innerHTML = '<option value="*">获取站点失败 (默认为全部)</option>';
                 }
+                await fetchDomains("*");
             }
+        }
+
+        async function fetchDomains(zoneId) {
+            const select = document.getElementById('domainSelect');
+            if (!select) return;
+
+            if (!zoneId || zoneId === '*') {
+                select.innerHTML = '<option value="*">全部域名</option>';
+                select.disabled = true;
+                return;
+            }
+
+            try {
+                select.disabled = false;
+                select.innerHTML = '<option value="*">加载中...</option>';
+
+                const response = await fetch(`/api/domains?zoneId=${encodeURIComponent(zoneId)}`);
+                const result = await response.json();
+
+                select.innerHTML = '<option value="*">全部域名</option>';
+                if (result.AccelerationDomains && result.AccelerationDomains.length > 0) {
+                    result.AccelerationDomains.forEach(domain => {
+                        const option = document.createElement('option');
+                        option.value = domain.DomainName;
+                        option.text = domain.DomainName;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.error("Error fetching domains:", err);
+                select.innerHTML = '<option value="*">获取域名失败 (默认为全部)</option>';
+                select.disabled = true;
+            }
+        }
+
+        async function handleZoneChange() {
+            const zoneId = document.getElementById('zoneId').value.trim();
+            await fetchDomains(zoneId);
+            refreshData();
         }
 
         ////ENTRANCE////
         async function initDashboard() {
             // Initialize charts
             chartTraffic = echarts.init(document.getElementById('chart_traffic'));
+            chartSecurityInterceptIp = echarts.init(document.getElementById('chart_security_intercept_ip'));
+            chartSecurityInterceptRegion = echarts.init(document.getElementById('chart_security_intercept_region'));
+            chartSecurityInterceptPath = echarts.init(document.getElementById('chart_security_intercept_path'));
             chartBandwidth = echarts.init(document.getElementById('chart_bandwidth'));
             chartRequests = echarts.init(document.getElementById('chart_requests'));
             chartPerformance = echarts.init(document.getElementById('chart_performance'));
@@ -1642,7 +2122,7 @@
             const results = {};
             
             // Progress Bar Logic
-            let totalTasks = 3 + allMetrics.length * 2;
+            let totalTasks = 4 + allMetrics.length * 2;
             let completedTasks = 0;
             let hasError = false;
 
@@ -1676,6 +2156,8 @@
             fetchPagesCloudFunctionStats(startTime, endTime).then((res) => updateProgress(res));
             // Start Pages Cloud Function Monthly Stats fetch (independent)
             fetchPagesCloudFunctionMonthlyStats().then((res) => updateProgress(res));
+            // Start domain security intercept analysis fetch (independent)
+            fetchSecurityInterceptData(startTime, endTime).then((res) => updateProgress(res));
 
             // Parallel fetch
             // calculateTimeRange called above (line 1606), reusing startTime/endTime variables
@@ -2348,34 +2830,28 @@
         }
 
         //通用处理
-        const renderTopChart = (results, chartInstance, metricName, mapObject = null) => {
+        const renderTopChart = (results, chartInstance, metricName, mapObject = null, config = {}) => {
+            const { keyFormatter, tooltipValueFormatter, axisLabelFormatter } = config;
             const data = results[metricName];
 
             if (!data || data.type !== 'top' || !data.data) return;
 
             const sortedData = [...data.data].sort((a, b) => b.Value - a.Value).slice(0, 10);
-            
-            let unit = '';
-            let divisor = 1;
-            let label = metricLabels[metricName] || '';
-            
-            if (metricName.includes('outFlux')) {
-                const maxVal = sortedData.length > 0 ? sortedData[0].Value : 0;
-                const best = getBestUnit(maxVal, 'bytes');
-                unit = best.unit;
-                divisor = best.divisor;
-            } else {
-                const maxVal = sortedData.length > 0 ? sortedData[0].Value : 0;
-                const best = getBestCountUnit(maxVal);
-                unit = best.unit;
-                divisor = best.divisor;
-            }
 
-            const yAxisData = sortedData.map(item => mapObject?.[item.Key] || item.Key).reverse(); //问题点：没对“字段不存在”的短横杠做判断
-            const seriesData = sortedData.map(item => {
-                const val = item.Value / divisor;
-                return (divisor === 1) ? val : val.toFixed(2);
+            const unitInfo = metricName.includes('outFlux')
+                ? getBestUnit(sortedData[0]?.Value || 0, 'bytes')
+                : getBestCountUnit(sortedData[0]?.Value || 0);
+
+            const yAxisData = sortedData.map(item => {
+                const mapped = mapObject?.[item.Key] || item.Key;
+                return keyFormatter ? keyFormatter(mapped) : mapped;
             }).reverse();
+
+            const rawSeriesData = sortedData.map(item => item.Value).reverse();
+            const seriesData = rawSeriesData.map(val => {
+                const converted = val / unitInfo.divisor;
+                return unitInfo.divisor === 1 ? converted : converted.toFixed(2);
+            });
 
             let color = '#3b82f6';
             const lowerName = metricName.toLowerCase();
@@ -2391,41 +2867,32 @@
                     trigger: 'axis',
                     axisPointer: { type: 'shadow' },
                     formatter: (params) => {
-                         const param = params[0];
-                         let name = param.name;
-                         if (name.length > 100) name = name.substring(0, 100) + '...';
-                         
-                         const rawVal = sortedData[sortedData.length - 1 - param.dataIndex].Value;
-                         
-                         let formattedVal = '';
-                         if (metricName.includes('outFlux')) {
-                             formattedVal = formatBytes(rawVal);
-                         } else {
-                             const fVal = formatCount(rawVal);
-                             // Append '次' if not present in unit (formatCount returns unit, but we might want explicit '次')
-                             // formatCount returns "1.23 万". "1.23 万次" sounds good.
-                             // "500" -> "500 次".
-                             formattedVal = fVal + (fVal.includes('千') || fVal.includes('万') || fVal.includes('亿') ? '次' : ' 次');
-                         }
-                         
-                         return `${name}<br/>${param.marker}${label}: ${formattedVal}`;
+                        const param = params[0];
+                        const rawVal = rawSeriesData[param.dataIndex];
+                        let formattedVal;
+                        if (tooltipValueFormatter) {
+                            formattedVal = tooltipValueFormatter(rawVal, metricName);
+                        } else if (metricName.includes('outFlux')) {
+                            formattedVal = formatBytes(rawVal);
+                        } else {
+                            const fVal = formatCount(rawVal);
+                            formattedVal = fVal + (fVal.includes('千') || fVal.includes('万') || fVal.includes('亿') ? '次' : ' 次');
+                        }
+                        return `${param.name}<br/>${param.marker}${metricLabels[metricName] || ''}: ${formattedVal}`;
                     }
                 },
                 grid: { left: '3%', right: '10%', bottom: '3%', containLabel: true },
-                xAxis: { type: 'value', name: unit },
-                yAxis: { 
-                    type: 'category', 
+                xAxis: { type: 'value', name: unitInfo.unit },
+                yAxis: {
+                    type: 'category',
                     data: yAxisData,
                     axisLabel: {
-                        formatter: function (value) {
-                            if (value.length > 20) return value.substring(0, 20) + '...';
-                            return value;
-                        }
+                        formatter: axisLabelFormatter || ((value) => value.length > 20 ? value.substring(0, 20) + '...' : value)
                     }
                 },
                 series: [
                     {
-                        name: label,
+                        name: metricLabels[metricName] || '',
                         type: 'bar',
                         data: seriesData,
                         itemStyle: { color: color },
@@ -2498,34 +2965,53 @@
             updateTopMapChart(results);
 
             // Flux Charts
+            const truncate20 = (val) => val.length > 20 ? val.substring(0, 20) + '...' : val;
+            const truncate50 = (val) => val.length > 50 ? val.substring(0, 50) + '...' : val;
+            const refererFormatter = (key) => {
+                const cleaned = (key || '').replace(/`/g, '').trim();
+                return cleaned && cleaned !== '-' ? cleaned : '字段不存在';
+            };
+            const refererAxisFormatter = (val) => truncate50(refererFormatter(val));
+            const refererTooltipFormatter = (raw) => {
+                const formatted = formatCount(raw);
+                return formatted + (formatted.includes('千') || formatted.includes('万') || formatted.includes('亿') ? '次' : ' 次');
+            };
+
+            // Flux Charts
             renderTopChart(results, chartTopCountry, 'l7Flow_outFlux_country', countryMap);
             renderTopChart(results, chartTopProvince, 'l7Flow_outFlux_province', provinceMap);
-            renderTopChart(results, chartTopStatusCode, 'l7Flow_outFlux_statusCode');
-            renderTopChart(results, chartTopDomain, 'l7Flow_outFlux_domain');
-            renderTopChart(results, chartTopUrl, 'l7Flow_outFlux_url');
+            renderTopChart(results, chartTopStatusCode, 'l7Flow_outFlux_statusCode', null, { axisLabelFormatter: truncate20 });
+            renderTopChart(results, chartTopDomain, 'l7Flow_outFlux_domain', null, { axisLabelFormatter: truncate50 });
+            renderTopChart(results, chartTopUrl, 'l7Flow_outFlux_url', null, { axisLabelFormatter: truncate50 });
             renderTopChart(results, chartTopResourceType, 'l7Flow_outFlux_resourceType');
             renderTopChart(results, chartTopSip, 'l7Flow_outFlux_sip');
-            //renderTopChart(results, chartTopReferer, 'l7Flow_outFlux_referers'); //以前方案
-            updateTopRefererChart(results); //降级处理，包含“字段不存在”处理
+            renderTopChart(results, chartTopReferer, 'l7Flow_outFlux_referers', null, {
+                keyFormatter: refererFormatter,
+                axisLabelFormatter: refererAxisFormatter,
+                tooltipValueFormatter: (raw) => formatBytes(raw)
+            });
             renderTopChart(results, chartTopUaDevice, 'l7Flow_outFlux_ua_device');
             renderTopChart(results, chartTopUaBrowser, 'l7Flow_outFlux_ua_browser');
             renderTopChart(results, chartTopUaOs, 'l7Flow_outFlux_ua_os');
-            renderTopChart(results, chartTopUa, 'l7Flow_outFlux_ua');
+            renderTopChart(results, chartTopUa, 'l7Flow_outFlux_ua', null, { axisLabelFormatter: truncate50 });
 
             // Request Charts
             renderTopChart(results, chartTopRequestCountry, 'l7Flow_request_country', countryMap);
             renderTopChart(results, chartTopRequestProvince, 'l7Flow_request_province', provinceMap);
-            renderTopChart(results, chartTopRequestStatusCode, 'l7Flow_request_statusCode');
-            renderTopChart(results, chartTopRequestDomain, 'l7Flow_request_domain');
-            renderTopChart(results, chartTopRequestUrl, 'l7Flow_request_url');
+            renderTopChart(results, chartTopRequestStatusCode, 'l7Flow_request_statusCode', null, { axisLabelFormatter: truncate20 });
+            renderTopChart(results, chartTopRequestDomain, 'l7Flow_request_domain', null, { axisLabelFormatter: truncate50 });
+            renderTopChart(results, chartTopRequestUrl, 'l7Flow_request_url', null, { axisLabelFormatter: truncate50 });
             renderTopChart(results, chartTopRequestResourceType, 'l7Flow_request_resourceType');
             renderTopChart(results, chartTopRequestSip, 'l7Flow_request_sip');
-            //renderTopChart(results, chartTopRequestReferer, 'l7Flow_request_referers');
-            updateTopRequestRefererChart(results); //降级方案
+            renderTopChart(results, chartTopRequestReferer, 'l7Flow_request_referers', null, {
+                keyFormatter: refererFormatter,
+                axisLabelFormatter: refererAxisFormatter,
+                tooltipValueFormatter: refererTooltipFormatter
+            });
             renderTopChart(results, chartTopRequestUaDevice, 'l7Flow_request_ua_device');
             renderTopChart(results, chartTopRequestUaBrowser, 'l7Flow_request_ua_browser');
             renderTopChart(results, chartTopRequestUaOs, 'l7Flow_request_ua_os');
-            renderTopChart(results, chartTopRequestUa, 'l7Flow_request_ua');
+            renderTopChart(results, chartTopRequestUa, 'l7Flow_request_ua', null, { axisLabelFormatter: truncate50 });
         }
 
 
@@ -3507,6 +3993,9 @@
         // Handle Resize
         window.addEventListener('resize', () => {
             chartTraffic && chartTraffic.resize();
+            chartSecurityInterceptIp && chartSecurityInterceptIp.resize();
+            chartSecurityInterceptRegion && chartSecurityInterceptRegion.resize();
+            chartSecurityInterceptPath && chartSecurityInterceptPath.resize();
             chartBandwidth && chartBandwidth.resize();
             chartRequests && chartRequests.resize();
             chartPerformance && chartPerformance.resize();

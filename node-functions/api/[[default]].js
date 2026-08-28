@@ -96,10 +96,135 @@ const FUNCTION_METRICS = [
     'function_cpuCostTime'
 ];
 
+function buildDomainFilters(domain) {
+    if (!domain || domain === '*') {
+        return undefined;
+    }
+    return [{ Key: "domain", Operator: "equals", Value: [domain] }];
+}
+
+// ISO 8601 日期时间格式（要求包含时区，避免把本地时间误传给 TEO）。
+const ISO_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+function parseIsoDateTime(value) {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const normalized = value.trim();
+    const parts = normalized.match(ISO_DATETIME_PATTERN);
+    if (!parts) {
+        return null;
+    }
+
+    const timestamp = Date.parse(normalized);
+    if (Number.isNaN(timestamp)) {
+        return null;
+    }
+
+    // Date.parse 可能把 2 月 30 日等日期静默归一化，先单独校验日历日期。
+    const datePrefix = normalized.slice(0, 10).split('-').map(Number);
+    const calendarDate = new Date(0);
+    calendarDate.setUTCFullYear(datePrefix[0], datePrefix[1] - 1, datePrefix[2]);
+    if (
+        calendarDate.getUTCFullYear() !== datePrefix[0]
+        || calendarDate.getUTCMonth() !== datePrefix[1] - 1
+        || calendarDate.getUTCDate() !== datePrefix[2]
+    ) {
+        return null;
+    }
+
+    return timestamp;
+}
+
+function toNumber(value) {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+
+    if (typeof value === 'string') {
+        const parsed = Number(value.replace(/,/g, '').trim());
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    return 0;
+}
+
+function normalizeTopData(response) {
+    const detailData = [];
+
+    if (Array.isArray(response?.Data)) {
+        response.Data.forEach(item => {
+            if (Array.isArray(item?.DetailData)) {
+                detailData.push(...item.DetailData);
+            }
+        });
+    }
+
+    // 保持对 SDK/Mock 直接返回 DetailData 的兼容性。
+    if (detailData.length === 0 && Array.isArray(response?.DetailData)) {
+        detailData.push(...response.DetailData);
+    }
+
+    return detailData.slice(0, 10).reduce((result, item) => {
+        const rawKey = item?.Key ?? item?.key;
+        if (rawKey === undefined || rawKey === null) {
+            return result;
+        }
+
+        const rawValue = item?.Value ?? item?.value;
+        result.push({
+            key: String(rawKey),
+            value: toNumber(rawValue)
+        });
+        return result;
+    }, []);
+}
+
+function normalizeTotal(response) {
+    const dataRows = Array.isArray(response?.Data)
+        ? response.Data
+        : (Array.isArray(response?.TimingDataRecords) ? response.TimingDataRecords : []);
+    const metricEntries = [];
+
+    dataRows.forEach(row => {
+        if (row?.MetricName) {
+            metricEntries.push(row);
+        }
+
+        ['TypeValue', 'Value'].forEach(field => {
+            if (Array.isArray(row?.[field])) {
+                metricEntries.push(...row[field]);
+            }
+        });
+    });
+
+    const metric = metricEntries.find(item => item?.MetricName === 'l7Flow_request')
+        || metricEntries[0];
+
+    if (metric) {
+        if (metric.Sum !== undefined && metric.Sum !== null) {
+            return toNumber(metric.Sum);
+        }
+
+        if (metric.Value !== undefined && !Array.isArray(metric.Value)) {
+            return toNumber(metric.Value);
+        }
+
+        if (Array.isArray(metric.Detail)) {
+            return metric.Detail.reduce((sum, item) => {
+                return sum + toNumber(item?.Value ?? item?.value);
+            }, 0);
+        }
+    }
+
+    return toNumber(response?.Total ?? response?.total);
+}
+
 app.get('/config', (req, res) => {
     res.json({
-        siteName: process.env.SITE_NAME || 'AcoFork 的 EdgeOne 监控大屏',
-        siteIcon: process.env.SITE_ICON || 'https://q2.qlogo.cn/headimg_dl?dst_uin=2726730791&spec=0'
+        siteName: process.env.SITE_NAME || '茶茶吖 的 EdgeOne 监控大屏',
+        siteIcon: process.env.SITE_ICON || 'https://blog.ccya.top/logo.svg'
     });
 });
 
@@ -133,6 +258,32 @@ app.get('/zones', async (req, res) => {
         res.json(data);
     } catch (err) {
         console.error("Error calling DescribeZones:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 新增：获取站点下的所有加速域名
+app.get('/domains', async (req, res) => {
+    try {
+        const { secretId, secretKey } = getKeys();
+        const { zoneId } = req.query;
+
+        if (!secretId || !secretKey) {
+            return res.status(500).json({ error: "Missing credentials" });
+        }
+
+        const TeoClient = teo.v20220901.Client;
+        const client = new TeoClient({
+            credential: { secretId, secretKey },
+            region: "ap-guangzhou",
+            profile: { httpProfile: { endpoint: "teo.tencentcloudapi.com" } }
+        });
+
+        const params = zoneId && zoneId !== '*' ? { ZoneId: zoneId } : {};
+        const data = await client.DescribeAccelerationDomains(params);
+        res.json(data);
+    } catch (err) {
+        console.error("Error fetching domains:", err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -434,6 +585,7 @@ app.get('/traffic', async (req, res) => {
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
         const metric = req.query.metric || "l7Flow_flux";
+        const domain = req.query.domain;
         const startTime = req.query.startTime || formatDate(yesterday);
         const endTime = req.query.endTime || formatDate(now);
         const interval = req.query.interval;
@@ -445,6 +597,8 @@ app.get('/traffic', async (req, res) => {
 
         console.log(`Requesting metric: ${metric}, StartTime: ${startTime}, EndTime: ${endTime}, Interval: ${interval}`);
 
+        const domainFilters = buildDomainFilters(domain);
+
         if (TOP_ANALYSIS_METRICS.includes(metric)) {
             // API: DescribeTopL7AnalysisData
             params = {
@@ -453,6 +607,9 @@ app.get('/traffic', async (req, res) => {
                 "MetricName": metric,
                 "ZoneIds": zoneIds
             };
+            if (domainFilters) {
+                params["Filters"] = domainFilters;
+            }
             console.log("Calling DescribeTopL7AnalysisData with params:", JSON.stringify(params, null, 2));
             data = await client.DescribeTopL7AnalysisData(params);
         } else if (SECURITY_METRICS.includes(metric)) {
@@ -545,6 +702,9 @@ app.get('/traffic', async (req, res) => {
             if (interval && interval !== 'auto') {
                 params["Interval"] = interval;
             }
+            if (domainFilters) {
+                params["Filters"] = domainFilters;
+            }
             
             console.log("Calling Timing API with params:", JSON.stringify(params, null, 2));
             
@@ -558,6 +718,109 @@ app.get('/traffic', async (req, res) => {
         res.json(data);
     } catch (err) {
         console.error("Error calling Tencent Cloud API:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 获取指定域名（可按国家过滤）被 Web 防护拦截的来源 IP、地区、请求路径排行。
+app.get('/security-intercepts', async (req, res) => {
+    const zoneId = typeof req.query.zoneId === 'string' ? req.query.zoneId.trim() : '';
+    const domain = typeof req.query.domain === 'string' ? req.query.domain.trim() : '';
+    const startTime = typeof req.query.startTime === 'string' ? req.query.startTime.trim() : '';
+    const endTime = typeof req.query.endTime === 'string' ? req.query.endTime.trim() : '';
+    const rawCountry = req.query.country;
+    const country = typeof rawCountry === 'string' ? rawCountry.trim().toUpperCase() : '';
+
+    if (!zoneId || zoneId === '*' || !domain || domain === '*') {
+        return res.status(400).json({ error: "zoneId and domain are required and cannot be '*'" });
+    }
+
+    if (rawCountry !== undefined && (typeof rawCountry !== 'string' || !/^[A-Z]{2}$/.test(country))) {
+        return res.status(400).json({ error: 'country must be a valid ISO 3166-1 alpha-2 code' });
+    }
+
+    const startTimestamp = parseIsoDateTime(startTime);
+    const endTimestamp = parseIsoDateTime(endTime);
+    if (startTimestamp === null || endTimestamp === null) {
+        return res.status(400).json({ error: 'startTime and endTime must be valid ISO 8601 timestamps' });
+    }
+
+    if (startTimestamp >= endTimestamp) {
+        return res.status(400).json({ error: 'startTime must be earlier than endTime' });
+    }
+
+    const maxRangeMs = 31 * 24 * 60 * 60 * 1000;
+    if (endTimestamp - startTimestamp > maxRangeMs) {
+        return res.status(400).json({ error: 'Time range cannot exceed 31 days' });
+    }
+
+    try {
+        const { secretId, secretKey } = getKeys();
+        if (!secretId || !secretKey) {
+            return res.status(500).json({ error: 'Missing credentials' });
+        }
+
+        const TeoClient = teo.v20220901.Client;
+        const client = new TeoClient({
+            credential: { secretId, secretKey },
+            region: 'ap-guangzhou',
+            profile: { httpProfile: { endpoint: 'teo.tencentcloudapi.com' } }
+        });
+
+        const createFilters = () => {
+            const filters = [
+                { Key: 'domain', Operator: 'equals', Value: [domain] },
+                { Key: 'mitigatedByWebSecurity', Operator: 'equals', Value: ['yes'] }
+            ];
+            if (country) {
+                filters.push({ Key: 'country', Operator: 'equals', Value: [country] });
+            }
+            return filters;
+        };
+        const createBaseParams = () => ({
+            StartTime: startTime,
+            EndTime: endTime,
+            ZoneIds: [zoneId],
+            Filters: createFilters()
+        });
+
+        // 五个查询互不依赖，必须并行发起以减少接口响应时间。
+        const [totalData, ipData, countryData, provinceData, pathData] = await Promise.all([
+            client.DescribeTimingL7AnalysisData({
+                ...createBaseParams(),
+                MetricNames: ['l7Flow_request']
+            }),
+            client.DescribeTopL7AnalysisData({
+                ...createBaseParams(),
+                MetricName: 'l7Flow_request_sip',
+                Limit: 10
+            }),
+            client.DescribeTopL7AnalysisData({
+                ...createBaseParams(),
+                MetricName: 'l7Flow_request_country',
+                Limit: 10
+            }),
+            client.DescribeTopL7AnalysisData({
+                ...createBaseParams(),
+                MetricName: 'l7Flow_request_province',
+                Limit: 10
+            }),
+            client.DescribeTopL7AnalysisData({
+                ...createBaseParams(),
+                MetricName: 'l7Flow_request_url',
+                Limit: 10
+            })
+        ]);
+
+        res.json({
+            total: normalizeTotal(totalData),
+            ipTop: normalizeTopData(ipData),
+            countryTop: normalizeTopData(countryData),
+            provinceTop: normalizeTopData(provinceData),
+            pathTop: normalizeTopData(pathData)
+        });
+    } catch (err) {
+        console.error('Error calling Tencent Cloud security intercept APIs:', err);
         res.status(500).json({ error: err.message });
     }
 });
